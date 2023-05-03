@@ -2,15 +2,21 @@
 
 (in-package :gpt)
 
-(defvar *openai-api-key*
-  (let ((file-name "openai-api.key"))
-    (when (probe-file file-name)
-      (with-open-file (stream file-name :direction :input)
-        (read-line stream)))))
+;; call set-openapi-key before calling any of these functions
+(defvar *openai-api-key* "missing")
 
 (defvar *default-fine-tune-model*  "davinci")
 (defvar *default-chat-model* "text-davinci-003")
 (defvar *default-ask-chat-model* "gpt-3.5-turbo")
+
+(defconstant *ignore-chars*  
+    (make-array 2 :element-type 'character 
+                :initial-contents '(#\newline #\space)))
+
+(defun set-openai-api-key (key)
+  (setf *openai-api-key* 
+    (string-trim *ignore-chars* key)))
+
 
 (defun ask-chat (text-or-alist
                  &key
@@ -63,13 +69,13 @@ text-or-alist can be either a simple string or a transcript in the form of an al
       (or content "No text"))))
 
 (defun call-openai (cmd &key
-                          ((:method method) :get)
-                          ((:content content) nil)
-                          ((:timeout timeout) 10)
-                          ((:content-type content-type) "application/json")
-                          ((:headers extra-headers) nil)
-                          ((:query query) nil)
-                          ((:verbose verbose) nil))
+                          (method :get)
+                          (content nil)
+                          (timeout 10)
+                          (content-type "application/json")
+                          (extra-headers nil)
+                          (query nil)
+                          (verbose nil))
   "Generic interface to all openai API functions using do-http-request."
   (let ((uri (format nil "https://api.openai.com/v1/~a" cmd)))
     (multiple-value-bind (body code headers page socket req)
@@ -94,17 +100,17 @@ text-or-alist can be either a simple string or a transcript in the form of an al
 
 
 (defun chat (text &key
-                    ((:model model) *default-chat-model*)
-                    ((:max-tokens max-tokens) 2048)
-                    ((:temperature temperature) 0.8)
-                    ((:timeout timeout) 10)
-                    ((:presence-penalty presence-penalty) 0.0)
-                    ((:frequency-penalty frequency-penalty) 0.0)
-                    ((:separator separator) "")
-                    ((:stop stop) "")
-                    ((:n n) 1)
-                    ((:output-format output-format) :text)
-                    ((:verbose verbose) nil)
+                    (model *default-chat-model*)
+                    (max-tokens 2048)
+                    (temperature 0.8)
+                    (timeout 10)
+                    (presence-penalty 0.0)
+                    (frequency-penalty 0.0)
+                    (separator "")
+                    (stop "")
+                    (n 1)
+                    (output-format :text)
+                    (verbose nil)
                     )
   "Use this function for GPT-3 models ada, babbage, davinci.
 Simple chatbot function: say (chat \"Hello.\")"
@@ -130,17 +136,17 @@ Simple chatbot function: say (chat \"Hello.\")"
 
 
 (defun ask-json (text &key
-                        ((:model model) *default-chat-model*)
-                        ((:separator separator) "")
-                        ((:stop stop) "")
-                        ((:logprobs logprobs) nil)
-                        ((:n n) 1)
-                        ((:timeout timeout) 10)
-                        ((:temperature temperature) 1)
-                        ((:presence-penalty presence-penalty) 0.0)
-                        ((:frequency-penalty frequency-penalty) 0.0)
-                        ((:max-tokens max-tokens) 64)
-                        ((:verbose verbose nil)))
+                        (model *default-chat-model*)
+                        (separator "")
+                        (stop "")
+                        (logprobs nil)
+                        (n 1)
+                        (timeout 10)
+                        (temperature 1)
+                        (presence-penalty 0.0)
+                        (frequency-penalty 0.0)
+                        (max-tokens 64)
+                        (verbose nil))
   "Slightly lower level interface to ask openai for a JSON object.
   Each prompt should end with a fixed separator to inform the model when the prompt ends and the completion begins."
 ;;;  (format t "ask-json timeout=~a~%" timeout)
@@ -178,30 +184,28 @@ Simple chatbot function: say (chat \"Hello.\")"
 
 
 
-(let ((70-years-in-seconds (round (* 70 365.25 3600 24)))
-      (tz-adjust (- (* 3600 9)))
-      (day-names
-        '("Mon" "Tue" "Wed"
-          "Thu" "Fri" "Sat"
-          "Sun")))
-  (defun date-string (ut)
+(defconstant *70-years-in-seconds* (round (* 70 365.25 3600 24)))
+(defconstant *tz-adjust* (- (* 3600 9)))
+(defconstant *day-names* '("Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun"))
+
+(defun date-string (ut)
     "Weird Common Lisp Universal time to Unix time adjustment"
     (multiple-value-bind
 	  (second minute hour date month year day-of-week dst-p tz)
-        (decode-universal-time (+ ut 70-years-in-seconds tz-adjust))
+        (decode-universal-time (+ ut *70-years-in-seconds* *tz-adjust*))
       (declare (ignore tz dst-p))
       (format nil "~2,'0d:~2,'0d:~2,'0d on ~a, ~d/~2,'0d/~d ET"
 	      hour
 	      minute
 	      second
-	      (nth day-of-week day-names)
+	      (nth day-of-week *day-names*)
 	      month
 	      date
-	      year))))
+	      year)))
 
 
-(defun list-openai-files (&key ((:sort-key sort-key) "created_at")
-                          ((:stream stream) t))
+(defun list-openai-files (&key (sort-key "created_at")
+                          (stream t))
   "List all files in your openai directory"
   (let* ((file-list (call-openai "files"))
          (data (jso-val file-list "data")))
