@@ -1,4 +1,9 @@
-;; See the file "LICENSE" for the full license governing this code.;;
+;; See the file "LICENSE" for the full license governing this code.
+
+(sys:defpatch "acl-llm" 0
+  "Initial release of the :acl-llm module."
+  :type :system
+  :post-loadable t)
 
 (eval-when (compile load eval)
   (require :aserve)
