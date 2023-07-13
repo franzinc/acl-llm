@@ -1,7 +1,9 @@
 ;; See the file "LICENSE" for the full license governing this code.
 
-(sys:defpatch "acl-llm" 0
-  "Initial release of the :acl-llm module."
+#+(or (version= 10 1) (version= 11 0 beta))
+(sys:defpatch "acl-llm" 1
+  "v1: Function-calling API;
+   v0: Initial release of the :acl-llm module."
   :type :system
   :post-loadable t)
 
@@ -18,7 +20,7 @@
   (:export #:*openai-api-key*
            
            #:ask-chat
-           #:ask-json
+           #:ask-for-list
            #:call-openai
            #:cancel-fine-tune
            #:chat
@@ -37,7 +39,7 @@
   (:use :cl :excl :st-json :llm.gpt)
   (:nicknames :gpt-user))
 
-   
+(provide :acl-llm)
 
 
 

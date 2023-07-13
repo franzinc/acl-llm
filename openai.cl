@@ -9,30 +9,33 @@
 (defvar *default-chat-model* "text-davinci-003")
 (defvar *default-ask-chat-model* "gpt-3.5-turbo")
 
-(defconstant *ignore-chars*  
-    (make-array 2 :element-type 'character 
+(defconstant *ignore-chars*
+    (make-array 2 :element-type 'character
                 :initial-contents '(#\newline #\space)))
 
 (defun set-openai-api-key (key)
-  (setf *openai-api-key* 
+  (setf *openai-api-key*
     (string-trim *ignore-chars* key)))
 
-
+()
 (defun ask-chat (text-or-alist
                  &key
                    (model *default-ask-chat-model*)
-;;;                   (model "gpt-4")
                    (temperature 0.8)
+                   (max-tokens 2048)
                    (top-p 1)
                    (timeout 90)
                    (presence-penalty 0.0)
                    (frequency-penalty  0.0)
+                   (functions nil)
+                   (function-call nil)
                    (stop "")
+                   (verbose nil)
                    (n 1))
   "Use this function for ChatGPT API.
 Model should be one of: gpt3-3.5-turbo, gpt3-3.5-turbo-0301 or gpt4.
 text-or-alist can be either a simple string or a transcript in the form of an alist
-(role . content) ...) where role alternates between 'user' and 'system'"
+(role . content) ...) where role is one of  \"user\", \"system\", \"assistant\" or \"function\"."
 ;;;  (format t "ask-chat timeout=~a~%" timeout)
   (let* ((jso (jso))
          (message-array nil))
@@ -46,18 +49,19 @@ text-or-alist can be either a simple string or a transcript in the form of an al
                (push  message-jso message-array)))
 
     (pushjso "model" model jso)
-    (pushjso "messages" message-array
-             jso)
+    (pushjso "messages" message-array jso)
     (pushjso "temperature" temperature jso)
     (pushjso "top_p" top-p jso)
+    (pushjso "max_tokens" max-tokens jso)
     (pushjso "n" n jso)
     (pushjso "stop" stop jso)
     (pushjso "presence_penalty" presence-penalty jso)
     (pushjso "frequency_penalty" frequency-penalty jso)
     (pushjso "user" "anonymous" jso)
-
+    (when functions (pushjso "functions" functions jso))
+    (when function-call (pushjso "function_call" function-call jso))
 ;;;    (format t "~S~%" jso)
-    (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string jso)))
+    (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string jso) :verbose verbose))
            (choices (when resp (jso-val resp "choices")))
            (err (when resp (jso-val resp "error")))
            (message (when choices (jso-val (car choices) "message")))
@@ -66,7 +70,11 @@ text-or-alist can be either a simple string or a transcript in the form of an al
            )
       (when err (setf content (jso-val err "message")))
 ;;;      (format t "resp=~a~%" resp)
-      (or content "No text"))))
+      (cond ((and functions (string-equal "null" content))
+             (extract-arguments message))
+            (content content)
+            (t "No text")))))
+
 
 (defun call-openai (cmd &key
                           (method :get)
@@ -75,9 +83,12 @@ text-or-alist can be either a simple string or a transcript in the form of an al
                           (content-type "application/json")
                           (extra-headers nil)
                           (query nil)
+                          (retries 3)
+                          (delay 0.25)
                           (verbose nil))
-  "Generic interface to all openai API functions using do-http-request."
+  "Generic interface to all openai v1 API functions using do-http-request."
   (let ((uri (format nil "https://api.openai.com/v1/~a" cmd)))
+    (when verbose (format t "content=~S~%" content))
     (multiple-value-bind (body code headers page socket req)
         (net.aserve.client:do-http-request
           uri
@@ -88,15 +99,21 @@ text-or-alist can be either a simple string or a transcript in the form of an al
           :query query
           :method method)
       (declare (ignore req socket page))
-      (when verbose 
+      (when verbose
         (format t "headers=~S~%" headers)
         (format t "body=~S~%" body)
         (format t "code=~a~%" code))
-      (let ((jso (handler-case (st-json::read-json body)
-                   (error (e)
-                     (format t "~a: Unable to read json: ~a~%" e body)
-                     (jso)))))
-        jso))))
+      (cond ((and (= code 429) (> retries 0)) ;;; HTTP 429 API rate limit exceeded, retry with exponential backoff
+             (sleep delay)
+             (call-openai cmd :method method :content content :timeout timeout :content-type content-type
+                              :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
+            ((/= code 429)
+             (let ((jso (handler-case (st-json::read-json body)
+                          (error (e)
+                            (format t "~a: Unable to read json: ~a~%" e body)
+                            (jso)))))
+              jso))
+            (t (jso))))))
 
 
 (defun chat (text &key
@@ -108,60 +125,37 @@ text-or-alist can be either a simple string or a transcript in the form of an al
                     (frequency-penalty 0.0)
                     (separator "")
                     (stop "")
+                    (logprobs nil)
                     (n 1)
                     (output-format :text)
                     (verbose nil)
                     )
   "Use this function for GPT-3 models ada, babbage, davinci.
 Simple chatbot function: say (chat \"Hello.\")"
-
-  (let* ((jso (ask-json text :separator separator
-                             :model model :max-tokens max-tokens
-                             :temperature temperature
-                             :presence-penalty presence-penalty
-                             :frequency-penalty frequency-penalty
-                             :timeout timeout
-                             :n n
-                             :max-tokens max-tokens
-                             :stop stop
-                             :verbose verbose
-                             ))
-         (choices (jso-val jso "choices"))
-         (responses (or (mapcar (lambda (u) (string-trim (format nil " ~%") (jso-val u "text"))) choices) '("No text"))))
-    (when verbose(format t "jso=~S~%" jso))
+  (let* ((jso (jso))
+         (resp nil)
+         (choices nil)
+         (responses nil))
+    (pushjso "prompt" (format nil "~a~a" text separator) jso)
+    (pushjso "model" model jso)
+    (pushjso "max_tokens" max-tokens jso)
+    (pushjso "temperature" temperature jso)
+    (pushjso "presence_penalty" presence-penalty jso)
+    (pushjso "frequency_penalty" frequency-penalty jso)
+    (pushjso "stop" stop jso)
+    (when logprobs (pushjso "logprobs" logprobs jso))
+    (pushjso "n" n jso)
+    (format t "jso=~a~%" (json-string jso))
+    (setf resp (call-openai "completions" :method :post :content (json-string jso)
+                                          :timeout timeout
+                                          :verbose verbose
+                                          ))
+    (setf choices (jso-val resp "choices"))
+    (setf responses (or (mapcar (lambda (u) (string-trim (format nil " ~%") (jso-val u "text"))) choices) '("No text")))
+    (when verbose(format t "jso=~S~%" resp))
     (cond ((equal output-format :text) (car responses))
           (t responses))))
 
-
-
-
-(defun ask-json (text &key
-                        (model *default-chat-model*)
-                        (separator "")
-                        (stop "")
-                        (logprobs nil)
-                        (n 1)
-                        (timeout 10)
-                        (temperature 1)
-                        (presence-penalty 0.0)
-                        (frequency-penalty 0.0)
-                        (max-tokens 64)
-                        (verbose nil))
-  "Slightly lower level interface to ask openai for a JSON object.
-  Each prompt should end with a fixed separator to inform the model when the prompt ends and the completion begins."
-;;;  (format t "ask-json timeout=~a~%" timeout)
-  (let* ((jso (jso)))
-    (pushjso "prompt" (format nil "~a~a" text separator) jso)
-    (pushjso "model" model jso)
-    (pushjso "temperature" temperature jso)
-    (pushjso "max_tokens" max-tokens jso)
-    (pushjso "presence_penalty" presence-penalty jso)
-    (pushjso "frequency_penalty" frequency-penalty jso)
-    (when logprobs (pushjso "logprobs" logprobs jso))
-    (pushjso "n" n jso)
-    (pushjso "stop" stop jso)
-    (call-openai "completions" :method :post :content (json-string jso) :timeout timeout :verbose verbose)
-    ))
 
 
 (defun list-openai-models ()
@@ -309,7 +303,7 @@ Authorization: API-KEY
     (multiple-value-bind (shell-stream error-stream process)
         (excl:run-shell-command cmd
                                 :output :stream :error-output nil :wait nil)
-      (declare (ignore error-stream))      
+      (declare (ignore error-stream))
       (let ((txt (read-lines-from-stream shell-stream)))
 
         (sys:reap-os-subprocess :pid process :wait nil)
@@ -350,7 +344,6 @@ Authorization: API-KEY
 		       (t (list value (cdr found))))))
           (t (push (cons key value) (st-json::jso-alist  jso))))))
 
-
 (defun json-string (jso)
   "Turn a json object into a string."
 ;;;  (format t "json-string ~S~%" (type-of jso))
@@ -358,12 +351,66 @@ Authorization: API-KEY
     (st-json::write-json jso s)
     (get-output-stream-string s)))
 
-#+ignore(ask-chat "Hello")
+(defun extract-arguments (message)
+;;;  (format t "--- message=~s~%" message)
+;;;  (format t "--- function_call=~S~%" (jso-val message "function_call"))
+;;;  (format t "--- arguments=~S~%" (jso-val (jso-val message "function_call") "arguments"))
+;;;  (format t "content=~S~%" (jso-val message "content"))
+  (let* ((function-call (or (jso-val message "function_call") (jso)))
+         (name (jso-val function-call "name"))
+         (arguments (or (jso-val function-call "arguments") "{}")))
+;;;    (format t "--- name=~S~%" name)
+;;;    (format t "--- arguments=~S~%" arguments)
+    (values arguments name)))
 
-#+ignore(ask-chat
-' (("user" . "Maine")
-  ("system" . "Augusta")
-  ("user" . "California")
-  ("system" . "Sacramento")
-  ("user" . "Pennsylvania")))
+(defun ask-for-list (text &key (model *default-ask-chat-model*) (verbose nil))
+  (let ((function-call (jso))
+        (function (jso))
+        (parameters (jso))
+        (properties (jso))
+        (array (jso))
+        (items (jso))
+        )
+    (pushjso "name" "array_of_strings" function-call)
+    (pushjso "type" "string" items)
+    (pushjso "items" items array)
+    (pushjso "type" "array" array)
+    (pushjso "description" "the list of items" array)
+    (pushjso "array" array properties)
+    (pushjso "properties" properties parameters)
+    (pushjso "type" "object" parameters)
+    (pushjso "parameters" parameters function)
+    (pushjso "description" "function to list an array of specified items"  function)
+    (pushjso "name" "array_of_strings" function)
+    (multiple-value-bind (arguments name) (ask-chat text :model model :functions (list function) :verbose verbose :function-call function-call)
+      (handler-case
+      (cond ((null name) (list arguments))
+            (t
+             (let* (
+                    (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
+;;;             (foo (format t "--- jso=~S~%" jso))
+                    (response-list (jso-val jso "array")))
+;;;        (format t "arguments=~S~%" arguments)
+;;;        (format t "name=~S~%" name)
+               response-list)))
+        (error (e) (format t "~a~%" e) nil)))))
 
+#+ignore(progn
+(mapcar (lambda (film)
+          (format t "~a~%" film)
+          (list film
+                (ask-chat (format nil "What year was ~a released?  State the year only."film))
+                (ask-chat (format nil "Name the director of ~a.  State the name only."film))
+                (ask-for-list (format nil "List the main performers in ~a."film))
+                (ask-for-list (format nil "List the major awards won by ~a."film) )
+                (ask-chat (format nil "Write a 50 word summary of the plot of ~a."film))))
+        (ask-for-list "List the top 25 highest rated classic films."))
+
+
+(mapcar (lambda (scientist)
+          (format t "~a~%" scientist)
+          (list scientist
+                (ask-for-list (format nil "List the birth date and death date of ~a.  State the dates in YYYY-MM-DD form." scientist))
+                (ask-for-list (format nil "What are the main discoveries or inventions attributed to ~a?" scientist))))
+       (ask-for-list "Name the top 25 most important scientists in history."))
+)
