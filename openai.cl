@@ -28,6 +28,7 @@
                    (presence-penalty 0.0)
                    (frequency-penalty  0.0)
                    (functions nil)
+                   (output-format :text)
                    (function-call nil)
                    (stop "")
                    (verbose nil)
@@ -64,16 +65,18 @@ text-or-alist can be either a simple string or a transcript in the form of an al
     (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string jso) :verbose verbose))
            (choices (when resp (jso-val resp "choices")))
            (err (when resp (jso-val resp "error")))
-           (message (when choices (jso-val (car choices) "message")))
-           (content (when message (string-trim (format nil " ~%")
-                                                (jso-val message "content"))))
+           (messages (when choices (mapcar (lambda (choice) (jso-val choice "message")) choices)))
+           (contents (when messages (mapcar (lambda (message) (string-trim (format nil " ~%")
+                                                (jso-val message "content"))) messages)))
            )
-      (when err (setf content (jso-val err "message")))
+      (when err (setf contents `(,(jso-val err "message"))))
 ;;;      (format t "resp=~a~%" resp)
-      (cond ((and functions (string-equal "null" content))
-             (extract-arguments message))
-            (content content)
-            (t "No text")))))
+      (setf resp
+      (cond ((and functions (string-equal "null" (car contents)))
+             (mapcar 'extract-arguments messages))
+            (contents contents)
+            (t '("No text"))))
+      (cond ((equal output-format :text) (car resp)) (t resp)))))
 
 
 (defun call-openai (cmd &key
@@ -145,7 +148,7 @@ Simple chatbot function: say (chat \"Hello.\")"
     (pushjso "stop" stop jso)
     (when logprobs (pushjso "logprobs" logprobs jso))
     (pushjso "n" n jso)
-    (format t "jso=~a~%" (json-string jso))
+;;;    (format t "jso=~a~%" (json-string jso))
     (setf resp (call-openai "completions" :method :post :content (json-string jso)
                                           :timeout timeout
                                           :verbose verbose
@@ -299,7 +302,7 @@ Authorization: API-KEY
                   "curl https://api.openai.com/v1/files  -H \"Authorization: Bearer ~a\" -F purpose=\"fine-tune\" -F   file='@~a'"
                   *openai-api-key*
                   filename)))
-    (format t "~a~%" cmd)
+;;;    (format t "~a~%" cmd)
     (multiple-value-bind (shell-stream error-stream process)
         (excl:run-shell-command cmd
                                 :output :stream :error-output nil :wait nil)
@@ -412,5 +415,11 @@ Authorization: API-KEY
           (list scientist
                 (ask-for-list (format nil "List the birth date and death date of ~a.  State the dates in YYYY-MM-DD form." scientist))
                 (ask-for-list (format nil "What are the main discoveries or inventions attributed to ~a?" scientist))))
-       (ask-for-list "Name the top 25 most important scientists in history."))
+        (ask-for-list "Name the top 25 most important scientists in history."))
+
+(mapcar (lambda (person)
+          (format t "~a~%" person)
+          (ask-chat (format nil "State the circumstances of ~a's death in 25 words or less." person)))
+       (ask-for-list "Name 10 people in history who had very strange and unusual deaths."))
+
 )
