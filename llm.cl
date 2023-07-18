@@ -1,8 +1,9 @@
 ;; See the file "LICENSE" for the full license governing this code.
 
 #+(or (version= 10 1) (version= 11 0 beta))
-(sys:defpatch "acl-llm" 1
-  "v1: Function-calling API;
+(sys:defpatch "acl-llm" 2
+  "v2: fix interaction between :output-format and :function in ask-chat;
+   v1: Function-calling API;
    v0: Initial release of the :acl-llm module."
   :type :system
   :post-loadable t)

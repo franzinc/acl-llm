@@ -17,7 +17,7 @@
   (setf *openai-api-key*
     (string-trim *ignore-chars* key)))
 
-()
+
 (defun ask-chat (text-or-alist
                  &key
                    (model *default-ask-chat-model*)
@@ -69,14 +69,13 @@ text-or-alist can be either a simple string or a transcript in the form of an al
            (contents (when messages (mapcar (lambda (message) (string-trim (format nil " ~%")
                                                 (jso-val message "content"))) messages)))
            )
-      (when err (setf contents `(,(jso-val err "message"))))
-;;;      (format t "resp=~a~%" resp)
       (setf resp
+            (cond (err `(,(jso-val err "message")))
+                  (contents contents)
+                  (t '("No text"))))
       (cond ((and functions (string-equal "null" (car contents)))
-             (mapcar 'extract-arguments messages))
-            (contents contents)
-            (t '("No text"))))
-      (cond ((equal output-format :text) (car resp)) (t resp)))))
+             (extract-arguments (car messages)))
+            ((equal output-format :text) (car resp)) (t resp)))))
 
 
 (defun call-openai (cmd &key
@@ -155,7 +154,7 @@ Simple chatbot function: say (chat \"Hello.\")"
                                           ))
     (setf choices (jso-val resp "choices"))
     (setf responses (or (mapcar (lambda (u) (string-trim (format nil " ~%") (jso-val u "text"))) choices) '("No text")))
-    (when verbose(format t "jso=~S~%" resp))
+    (when verbose (format t "jso=~S~%" resp))
     (cond ((equal output-format :text) (car responses))
           (t responses))))
 
@@ -188,17 +187,17 @@ Simple chatbot function: say (chat \"Hello.\")"
 (defun date-string (ut)
     "Weird Common Lisp Universal time to Unix time adjustment"
     (multiple-value-bind
-	  (second minute hour date month year day-of-week dst-p tz)
+      (second minute hour date month year day-of-week dst-p tz)
         (decode-universal-time (+ ut *70-years-in-seconds* *tz-adjust*))
       (declare (ignore tz dst-p))
       (format nil "~2,'0d:~2,'0d:~2,'0d on ~a, ~d/~2,'0d/~d ET"
-	      hour
-	      minute
-	      second
-	      (nth day-of-week *day-names*)
-	      month
-	      date
-	      year)))
+          hour
+          minute
+          second
+          (nth day-of-week *day-names*)
+          month
+          date
+          year)))
 
 
 (defun list-openai-files (&key (sort-key "created_at")
@@ -320,8 +319,8 @@ Authorization: API-KEY
   (let ((result ""))
       (loop for line = (read-line stream nil)
             for x from 1
-	    while (and (< x limit) line)
-	    do
+        while (and (< x limit) line)
+        do
                (setf result (cond ((= x 1) line) (t (format nil "~a~%~a" result line)))))
     result))
 
@@ -342,9 +341,9 @@ Authorization: API-KEY
   (let ((found (assoc key (st-json::jso-alist  jso) :test 'string=)))
     (cond (found
            (setf (cdr found)
-	         (cond ((consp (cdr found))
-		        (cons value (cdr found)))
-		       (t (list value (cdr found))))))
+                 (cond ((consp (cdr found))
+                        (cons value (cdr found)))
+                       (t (list value (cdr found))))))
           (t (push (cons key value) (st-json::jso-alist  jso))))))
 
 (defun json-string (jso)
@@ -385,13 +384,14 @@ Authorization: API-KEY
     (pushjso "parameters" parameters function)
     (pushjso "description" "function to list an array of specified items"  function)
     (pushjso "name" "array_of_strings" function)
-    (multiple-value-bind (arguments name) (ask-chat text :model model :functions (list function) :verbose verbose :function-call function-call)
+    (multiple-value-bind (arguments name)
+        (ask-chat text :model model :functions (list function) :verbose verbose :function-call function-call)
+;;;      (format t "arguments=~S name=~S~%" arguments name)
       (handler-case
       (cond ((null name) (list arguments))
             (t
              (let* (
                     (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
-;;;             (foo (format t "--- jso=~S~%" jso))
                     (response-list (jso-val jso "array")))
 ;;;        (format t "arguments=~S~%" arguments)
 ;;;        (format t "name=~S~%" name)
@@ -407,7 +407,7 @@ Authorization: API-KEY
                 (ask-for-list (format nil "List the main performers in ~a."film))
                 (ask-for-list (format nil "List the major awards won by ~a."film) )
                 (ask-chat (format nil "Write a 50 word summary of the plot of ~a."film))))
-        (ask-for-list "List the top 25 highest rated classic films."))
+        (subseq (ask-for-list "List the top 10 highest rated classic films.") 0 9))
 
 
 (mapcar (lambda (scientist)
@@ -417,9 +417,13 @@ Authorization: API-KEY
                 (ask-for-list (format nil "What are the main discoveries or inventions attributed to ~a?" scientist))))
         (ask-for-list "Name the top 25 most important scientists in history."))
 
-(mapcar (lambda (person)
-          (format t "~a~%" person)
-          (ask-chat (format nil "State the circumstances of ~a's death in 25 words or less." person)))
-       (ask-for-list "Name 10 people in history who had very strange and unusual deaths."))
 
+(mapcar (lambda (state)
+          (format t "~a~%" state)
+          (list state
+                (ask-chat (format nil "What is the population of ~a?  Answer with a pure integer verbatim with no commas or punctuation." state))
+                (ask-chat (format nil "What is the area of ~a in square miles?  Answer with a pure integer verbatim with no commas or punctuation." state))
+                (ask-chat (format nil "What is the capital of the state of ~a?  Answer with the city name only." state))
+                ))
+        (ask-for-list "List 10 US states"))
 )
