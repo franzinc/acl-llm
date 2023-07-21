@@ -1,7 +1,7 @@
 ## llm
 
 mlisp      ?= /fi/cl/10.1/bin/mlisp-64
-mlisp_args  =
+mlisp_args ?=
 
 fasls:
 	@if  [ ! -e $(mlisp) ] ; then \
