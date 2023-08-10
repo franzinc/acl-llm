@@ -4,10 +4,11 @@
 
 ;; call set-openapi-key before calling any of these functions
 (defvar *openai-api-key* "missing")
-
-(defvar *default-fine-tune-model*  "davinci")
-(defvar *default-chat-model* "text-davinci-003")
 (defvar *default-ask-chat-model* "gpt-3.5-turbo")
+(defvar *default-chat-model* "text-davinci-003")  
+(defvar *default-fine-tune-model*  "davinci")
+(defvar *default-openai-delay* 0.25)
+(defvar *default-openai-retries* 4)
 
 (defconstant *ignore-chars*
     (make-array 2 :element-type 'character
@@ -15,7 +16,8 @@
 
 (defun set-openai-api-key (key)
   (setf *openai-api-key*
-    (string-trim *ignore-chars* key)))
+        (string-trim *ignore-chars* key)))
+
 
 
 (defun ask-chat (text-or-alist
@@ -38,7 +40,7 @@ Model should be one of: gpt3-3.5-turbo, gpt3-3.5-turbo-0301 or gpt4.
 text-or-alist can be either a simple string or a transcript in the form of an alist
 (role . content) ...) where role is one of  \"user\", \"system\", \"assistant\" or \"function\"."
 ;;;  (format t "ask-chat timeout=~a~%" timeout)
-  (let* ((jso (jso))
+  (let* ((completions-jso (st-json::jso))
          (message-array nil))
     (when (stringp text-or-alist)
       (setf text-or-alist `(("user" . ,text-or-alist))))
@@ -49,20 +51,20 @@ text-or-alist can be either a simple string or a transcript in the form of an al
                (pushjso "content" content message-jso)
                (push  message-jso message-array)))
 
-    (pushjso "model" model jso)
-    (pushjso "messages" message-array jso)
-    (pushjso "temperature" temperature jso)
-    (pushjso "top_p" top-p jso)
-    (pushjso "max_tokens" max-tokens jso)
-    (pushjso "n" n jso)
-    (pushjso "stop" stop jso)
-    (pushjso "presence_penalty" presence-penalty jso)
-    (pushjso "frequency_penalty" frequency-penalty jso)
-    (pushjso "user" "anonymous" jso)
-    (when functions (pushjso "functions" functions jso))
-    (when function-call (pushjso "function_call" function-call jso))
+    (pushjso "model" model completions-jso)
+    (pushjso "messages" message-array completions-jso)
+    (pushjso "temperature" temperature completions-jso)
+    (pushjso "top_p" top-p completions-jso)
+    (pushjso "max_tokens" max-tokens completions-jso)
+    (pushjso "n" n completions-jso)
+    (pushjso "stop" stop completions-jso)
+    (pushjso "presence_penalty" presence-penalty completions-jso)
+    (pushjso "frequency_penalty" frequency-penalty completions-jso)
+    (pushjso "user" "anonymous" completions-jso)
+    (when functions (pushjso "functions" functions completions-jso))
+    (when function-call (pushjso "function_call" function-call completions-jso))
 ;;;    (format t "~S~%" jso)
-    (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string jso) :verbose verbose))
+    (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string completions-jso) :verbose verbose))
            (choices (when resp (jso-val resp "choices")))
            (err (when resp (jso-val resp "error")))
            (messages (when choices (mapcar (lambda (choice) (jso-val choice "message")) choices)))
@@ -85,8 +87,8 @@ text-or-alist can be either a simple string or a transcript in the form of an al
                           (content-type "application/json")
                           (extra-headers nil)
                           (query nil)
-                          (retries 3)
-                          (delay 0.25)
+                          (retries *default-openai-retries*)
+                          (delay *default-openai-delay*)
                           (verbose nil))
   "Generic interface to all openai v1 API functions using do-http-request."
   (let ((uri (format nil "https://api.openai.com/v1/~a" cmd)))
@@ -109,13 +111,12 @@ text-or-alist can be either a simple string or a transcript in the form of an al
              (sleep delay)
              (call-openai cmd :method method :content content :timeout timeout :content-type content-type
                               :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
-            ((/= code 429)
-             (let ((jso (handler-case (st-json::read-json body)
+            (t 
+             (let ((jso (handler-case (read-json body)
                           (error (e)
                             (format t "~a: Unable to read json: ~a~%" e body)
                             (jso)))))
-              jso))
-            (t (jso))))))
+              jso))))))
 
 
 (defun chat (text &key
@@ -314,44 +315,12 @@ Authorization: API-KEY
       )))
 
 
-(defun read-lines-from-stream (stream &key ((:limit limit) 100000))
-  "read lines of text from a stream (up to a limit) and append them together"
-  (let ((result ""))
-      (loop for line = (read-line stream nil)
-            for x from 1
-        while (and (< x limit) line)
-        do
-               (setf result (cond ((= x 1) line) (t (format nil "~a~%~a" result line)))))
-    result))
-
 
 (defun cancel-fine-tune (ftid)
   "Cancel a running or pending fine-tune"
   (call-openai (format nil "fine-tunes/~a/cancel" ftid) :method :post))
 
 
-(defun jso-val (jso key)
-  "Look up value for key in json object"
-  (let* ((alist (st-json::jso-alist  jso))
-         (val (cdr (assoc key alist :test 'string=))))
-    val))
-
-(defun pushjso (key value jso)
-  "Push a kev value pair into a json object"
-  (let ((found (assoc key (st-json::jso-alist  jso) :test 'string=)))
-    (cond (found
-           (setf (cdr found)
-                 (cond ((consp (cdr found))
-                        (cons value (cdr found)))
-                       (t (list value (cdr found))))))
-          (t (push (cons key value) (st-json::jso-alist  jso))))))
-
-(defun json-string (jso)
-  "Turn a json object into a string."
-;;;  (format t "json-string ~S~%" (type-of jso))
-  (let ((s (make-string-output-stream)))
-    (st-json::write-json jso s)
-    (get-output-stream-string s)))
 
 (defun extract-arguments (message)
 ;;;  (format t "--- message=~s~%" message)
