@@ -135,6 +135,7 @@
          (type-plural "Historical Figures") ;;; (ask-chat (format nil "pluralize ~a" type-name)))
          (elements (ask-for-list (format nil "List 100 members of the set of all ~a, comma-separated." type-plural))))
     (setf elements (remove-duplicates elements :test 'string-equal))
+    (setf (vector-database-embedder vector-database) #'llama2::embed)
     (format t "~a:~%" type-plural)
     (dolist (elt elements)
       (let* ((vec (embed elt))

@@ -1,8 +1,9 @@
 ;; See the file "LICENSE" for the full license governing this code.
 
 #+(or (version= 10 1) (version= 11 0 beta))
-(sys:defpatch "acl-llm" 3
-"v3: code to work with LLM embeddings
+(sys:defpatch "acl-llm" 4
+  "v4: fixed off-by-one error in shortq
+v3: code to work with LLM embeddings
 v2: fix interaction between :output-format and :function in ask-chat;
 v1: Function-calling API;
 v0: Initial release of the :acl-llm module."
