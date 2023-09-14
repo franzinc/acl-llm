@@ -2,10 +2,10 @@
 
 #+(or (version= 10 1) (version= 11 0 beta))
 (sys:defpatch "acl-llm" 3
-  "v3: code to work with LLM embeddings
-   v2: fix interaction between :output-format and :function in ask-chat;
-   v1: Function-calling API;
-   v0: Initial release of the :acl-llm module."
+"v3: code to work with LLM embeddings
+v2: fix interaction between :output-format and :function in ask-chat;
+v1: Function-calling API;
+v0: Initial release of the :acl-llm module."
   :type :system
   :post-loadable t)
 
@@ -16,24 +16,24 @@
 (defpackage :llm
   (:use :cl :excl :st-json)
   (:export
-           #:*default-vector-database-name*
-           #:*default-vector-database-dir*
-           #:mag
-           #:nn
-           #:read-vector-database
-           #:single-float-array
-           #:vector-database
-           #:vector-database-name
-           #:make-vector-database
-           #:test-vector-database           
-           #:vector-database-embedding-vectors
-           #:vector-database-property-vectors
-           #:write-vector-database
-           #:jso-val
-           #:json-string           
-           #:pushjso
-           #:read-lines-from-stream
-           ))
+   #:*default-vector-database-name*
+   #:*default-vector-database-dir*
+   #:mag
+   #:nn
+   #:read-vector-database
+   #:single-float-array
+   #:vector-database
+   #:vector-database-name
+   #:make-vector-database
+   #:sample-vector-database           
+   #:vector-database-embedding-vectors
+   #:vector-database-property-vectors
+   #:write-vector-database
+   #:jso-val
+   #:json-string           
+   #:pushjso
+   #:read-lines-from-stream
+   ))
 
 
 (defpackage :llm.gpt
@@ -54,13 +54,29 @@
                 #:vector-database
                 #:vector-database-name
                 #:make-vector-database
-                #:test-vector-database           
+                #:sample-vector-database           
                 #:vector-database-embedding-vectors
                 #:vector-database-property-vectors
                 #:write-vector-database
                 )
   (:nicknames :gpt)
   (:export
+;;; export all the symbols imported from nn
+   #:*default-vector-database-name*
+   #:*default-vector-database-dir*
+   #:mag
+   #:nn
+   #:read-vector-database
+   #:single-float-array
+   #:vector-database
+   #:vector-database-name
+   #:make-vector-database
+   #:sample-vector-database           
+   #:vector-database-embedding-vectors
+   #:vector-database-property-vectors
+   #:write-vector-database
+  
+;;; export symbols from gpt
    #:*openai-api-key*
    #:ask-chat
    #:ask-embed
@@ -88,7 +104,7 @@
                           #:json-string)
 
   (:use :cl :excl)
-  (:import-from :st-json #:jso #:read-json)  
+  (:import-from :st-json #:jso #:read-json)
   (:import-from :llm
                 #:*default-vector-database-name*
                 #:*default-vector-database-dir*
@@ -99,14 +115,29 @@
                 #:vector-database
                 #:vector-database-name
                 #:make-vector-database
-                #:test-vector-database           
+                #:sample-vector-database           
                 #:vector-database-embedding-vectors
                 #:vector-database-property-vectors
                 #:write-vector-database
                 )
   (:nicknames :llama2 :llama.cpp)
   (:export
+;;; export all the symbols imported from nn
+   #:*default-vector-database-name*
+   #:*default-vector-database-dir*
+   #:mag
+   #:nn
+   #:read-vector-database
+   #:single-float-array
+   #:vector-database
+   #:vector-database-name
+   #:make-vector-database
+   #:sample-vector-database           
+   #:vector-database-embedding-vectors
+   #:vector-database-property-vectors
+   #:write-vector-database
 
+;;; export symbols from llama2
    #:*llama-cpp-python-api-protocol*
    #:*llama-cpp-python-api-host*
    #:*llama-cpp-python-api-port*

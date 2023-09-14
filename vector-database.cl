@@ -38,7 +38,7 @@
                (delta (abs (- (mag vec) 1.0))))
           (when (> delta 0.001)
             (format t "~a ~a~%" n (mag vec))))
-        (error (e) (format t "~a ~a~%" n e)))))))
+        (error (e) (error "index ~a has error ~a~%" n e)))))))
 
 (defun find-in-vector-database (vector-database text) ;;
   "find a term in the database"
@@ -77,7 +77,7 @@
          (properties-checkpoint-filename (format nil "~a.checkpoint" properties-filename))
          (properties `(("dim" . ,dim) ("name" . ,name))))
     (setf (vector-database-properties vector-database) properties)
-    (format t "writing ~S~%" properties)
+    ;;(format t "writing ~S~%" properties)
     (with-open-file (out vectors-checkpoint-filename :direction :output :if-exists :supersede)
       (dolist (item (vector-database-embedding-vectors vector-database))
         (write-all-elements item out)
