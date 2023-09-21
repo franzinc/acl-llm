@@ -2,23 +2,29 @@
 
 (defvar *ada-002-dimensions* 1536)
 
-(defun ask-embedding (text &key (model "text-embedding-ada-002") (timeout 120))
-  "Call OpenAI to ask for a JSON object that contains an embedding vector.
-   May throw an exception if API call fails.  Suggest using long timeout."
-   (let* ((jso (jso)))
-    (pushjso "input" text jso)
-    (pushjso "model" model jso)
-      (call-openai "embeddings" :method :post :timeout timeout :verbose nil
-                 :content (json-string jso))))
+(eval-when (compile load eval)
+  (setq key-args-list '((verbose nil)
+                        (model "text-embedding-ada-002")
+                        (timeout 120))
+  
+        key-args-signature '(:verbose verbose :model model :timeout timeout)))
 
-(defun embed (text &key (verbose nil) (model "text-embedding-ada-002") (timeout 120))
-  "Embedding function to return a normalized unit vector of single precision floats."
-  (when verbose (format t "Embed '~a'.~%" text))
-  (let* ((data (car (jso-val (ask-embedding text :model model :timeout timeout) "data")))
-         (embedding (when data (jso-val data "embedding"))))
-    (cond (embedding (setf embedding (mapcar (lambda (u) (coerce u 'single-float)) embedding))
-                     (coerce embedding 'single-float-array))
-          (t (make-array *ada-002-dimensions* :element-type 'single-float :initial-element 0.0)))))
+
+(key-args-fun ask-embedding "" 
+                '(let* ((jso (jso)))
+                  (pushjso "input" prompt-or-messages jso)
+                  (pushjso "model" model jso)
+                  (call-openai "embeddings" :method :post :timeout timeout :verbose verbose
+                                            :content (json-string jso))))
+
+(key-args-fun embed ""
+                `(progn 
+                  (when verbose (format t "Embed '~a'.~%" prompt-or-messages))
+                  (let* ((data (car (jso-val (ask-embedding prompt-or-messages ,@key-args-signature) "data")))
+                         (embedding (when data (jso-val data "embedding"))))
+                    (cond (embedding (setf embedding (mapcar (lambda (u) (coerce u 'single-float)) embedding))
+                                     (coerce embedding 'single-float-array))
+                          (t (make-array *ada-002-dimensions* :element-type 'single-float :initial-element 0.0))))))
 
 
 #|

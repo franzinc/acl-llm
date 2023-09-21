@@ -128,7 +128,14 @@
                (setf (vector-database-embedding-vectors vector-database) (reverse embedding-vectors))))))
     vector-database))
 
-(defun nn (vector-database text &key (min-score 0.8) (top-n 10) (dotproduct 'dotproduct)) ;;; #'simdot::simdot))
+(defun sumsq (v w)
+  (let ((sum 0.0))
+    (dotimes (index (length v))
+      (let ((diff (- (aref v index) (aref w index))))
+        (setf sum (+ sum (* diff diff)))))
+    sum))
+
+(defun nn (vector-database text &key (min-score 0.8) (top-n 10) (similarity 'dotproduct)) ;;; #'simdot::simdot))
   "Find the top-n nearest neighbors in the database with match score at least min-score."
   (let ((shortq (init-shortq min-score top-n 'cadr))
         (embed (funcall (vector-database-embedder vector-database) text)))
@@ -136,7 +143,7 @@
           for vec in  (vector-database-embedding-vectors vector-database) do
             (assert (= (length vec) (length embed)))
             (destructuring-bind (id original-text . properties) item
-              (let ((score (funcall dotproduct embed vec)))
+              (let ((score (funcall similarity embed vec)))
 ;;;                (assert (<= score  1.0) (score label) (format t "score=~a text=~a~%" score text))
                 (insert-shortq-if shortq `(,id ,score ,original-text ,@properties)))))
     (shortq-item-pq shortq)))

@@ -1,18 +1,19 @@
 ;; See the file "LICENSE" for the full license governing this code.
 
+
 #|
 ;; not needed when found in agraph source
 #+(or (version= 10 1) (version= 11 0 beta))
-(sys:defpatch "acl-llm" 4
-  "v4: fixed off-by-one error in shortq
+(sys:defpatch "acl-llm" 5
+  "v5: LLAMA2 API refinement
+v4: fixed off-by-one error in shortq
 v3: code to work with LLM embeddings
 v2: fix interaction between :output-format and :function in ask-chat;
 v1: Function-calling API;
 v0: Initial release of the :acl-llm module."
   :type :system
   :post-loadable t)
-  |#
-
+|#
 
 (eval-when (compile load eval)
   (require :aserve)
@@ -23,6 +24,11 @@ v0: Initial release of the :acl-llm module."
   (:export
    #:*default-vector-database-name*
    #:*default-vector-database-dir*
+   #:args-list-macro
+   #:key-args-fun
+   #:key-args-list
+   #:key-args-signature
+   #:key-args-pushjso   
    #:mag
    #:nn
    #:read-vector-database
@@ -30,25 +36,33 @@ v0: Initial release of the :acl-llm module."
    #:vector-database
    #:vector-database-name
    #:make-vector-database
-   #:sample-vector-database           
+   #:sample-vector-database
    #:vector-database-embedding-vectors
    #:vector-database-property-vectors
+   #:vector-database-embedder
+   #:describe-vector-database
    #:write-vector-database
    #:jso-val
-   #:json-string           
+   #:json-string
    #:pushjso
    #:read-lines-from-stream
+   #:cosine-similarity
    ))
 
 
 (defpackage :llm.gpt
   (:shadowing-import-from :llm
+                          #:args-list-macro
+                          #:key-args-fun
+                          #:key-args-list
+                          #:key-args-signature
+                          #:key-args-pushjso                          
                           #:read-lines-from-stream
                           #:pushjso
                           #:jso-val
                           #:json-string)
   (:use :cl :excl)
-  (:import-from :st-json #:jso #:read-json)  
+  (:import-from :st-json #:jso #:read-json)
   (:import-from :llm
                 #:*default-vector-database-name*
                 #:*default-vector-database-dir*
@@ -59,7 +73,7 @@ v0: Initial release of the :acl-llm module."
                 #:vector-database
                 #:vector-database-name
                 #:make-vector-database
-                #:sample-vector-database           
+                #:sample-vector-database
                 #:vector-database-embedding-vectors
                 #:vector-database-property-vectors
                 #:write-vector-database
@@ -76,11 +90,13 @@ v0: Initial release of the :acl-llm module."
    #:vector-database
    #:vector-database-name
    #:make-vector-database
-   #:sample-vector-database           
+   #:sample-vector-database
    #:vector-database-embedding-vectors
    #:vector-database-property-vectors
+   #:vector-database-embedder
+   #:describe-vector-database
    #:write-vector-database
-  
+
 ;;; export symbols from gpt
    #:*openai-api-key*
    #:ask-chat
@@ -113,6 +129,11 @@ v0: Initial release of the :acl-llm module."
   (:import-from :llm
                 #:*default-vector-database-name*
                 #:*default-vector-database-dir*
+                #:args-list-macro
+                #:key-args-fun
+                #:key-args-list
+                #:key-args-signature
+                #:key-args-pushjso                
                 #:mag
                 #:nn
                 #:read-vector-database
@@ -120,9 +141,11 @@ v0: Initial release of the :acl-llm module."
                 #:vector-database
                 #:vector-database-name
                 #:make-vector-database
-                #:sample-vector-database           
+                #:sample-vector-database
                 #:vector-database-embedding-vectors
                 #:vector-database-property-vectors
+                #:vector-database-embedder
+                #:describe-vector-database
                 #:write-vector-database
                 )
   (:nicknames :llama2 :llama.cpp)
@@ -137,7 +160,7 @@ v0: Initial release of the :acl-llm module."
    #:vector-database
    #:vector-database-name
    #:make-vector-database
-   #:sample-vector-database           
+   #:sample-vector-database
    #:vector-database-embedding-vectors
    #:vector-database-property-vectors
    #:write-vector-database

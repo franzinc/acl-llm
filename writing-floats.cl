@@ -27,14 +27,14 @@
     (declare (single-float-array term1 term2 term3))
     (dotimes (i (length bm1))
       (incf (aref term1 0) (the single-float
-			     (* (the single-float (aref bm1 i))
-				(the single-float (aref bm2 i)))))
+			        (* (the single-float (aref bm1 i))
+				   (the single-float (aref bm2 i)))))
       (incf (aref term2 0) (the single-float
-			     (* (the single-float (aref bm1 i))
-				(the single-float (aref bm1 i)))))
+			        (* (the single-float (aref bm1 i))
+				   (the single-float (aref bm1 i)))))
       (incf (aref term3 0) (the single-float
-			     (* (the single-float (aref bm2 i))
-				(the single-float (aref bm2 i)))))
+			        (* (the single-float (aref bm2 i))
+				   (the single-float (aref bm2 i)))))
       )
     (/ (aref term1 0)
        (* (sqrt (aref term2 0)) (sqrt (aref term3 0))))))

@@ -1,14 +1,36 @@
 ;; See the file "LICENSE" for the full license governing this code.;;
-
 (in-package :gpt)
 
 ;; call set-openapi-key before calling any of these functions
 (defvar *openai-api-key* "missing")
-(defvar *default-ask-chat-model* "gpt-3.5-turbo")
-(defvar *default-chat-model* "text-davinci-003")  
-(defvar *default-fine-tune-model*  "davinci")
-(defvar *default-openai-delay* 0.25)
-(defvar *default-openai-retries* 4)
+(defvar *openai-default-ask-chat-model* "gpt-4")
+(defvar *openai-default-chat-model* "text-davinci-003")
+(defvar *openai-default-max-tokens* 2048)
+
+(defvar *openai-default-fine-tune-model*  "davinci")
+(defvar *openai-default-initial-delay* 0.25)
+(defvar *openai-default-retries* 4)
+(defvar *openai-default-n* 1)
+(defvar *openai-default-stop* "")
+
+(defvar *openai-default-best-of* nil)
+(defvar *openai-default-echo* nil)
+(defvar *openai-default-frequency-penalty* 0.0)
+(defvar *openai-default-functions* nil)
+(defvar *openai-default-function-call* nil)
+(defvar *openai-default-logit-bias* nil)
+(defvar *openai-default-logprobs* nil)
+(defvar *openai-default-output-format* :text)
+(defvar *openai-default-presence-penalty* 0.0)
+(defvar *openai-default-stream* :false)
+(defvar *openai-default-suffix* nil)
+(defvar *openai-default-temperature* 0.8)
+(defvar *openai-default-timeout* 120)
+(defvar *openai-default-top-p* 0.95)
+(defvar *openai-default-user* "anonymous")
+(defvar *openai-default-min-score* 0.0)
+(defvar *openai-default-top-n* 10)
+
 
 (defconstant *ignore-chars*
     (make-array 2 :element-type 'character
@@ -18,77 +40,15 @@
   (setf *openai-api-key*
         (string-trim *ignore-chars* key)))
 
-
-
-(defun ask-chat (text-or-alist
-                 &key
-                   (model *default-ask-chat-model*)
-                   (temperature 0.8)
-                   (max-tokens 2048)
-                   (top-p 1)
-                   (timeout 90)
-                   (presence-penalty 0.0)
-                   (frequency-penalty  0.0)
-                   (functions nil)
-                   (output-format :text)
-                   (function-call nil)
-                   (stop "")
-                   (verbose nil)
-                   (n 1))
-  "Use this function for ChatGPT API.
-Model should be one of: gpt3-3.5-turbo, gpt3-3.5-turbo-0301 or gpt4.
-text-or-alist can be either a simple string or a transcript in the form of an alist
-(role . content) ...) where role is one of  \"user\", \"system\", \"assistant\" or \"function\"."
-;;;  (format t "ask-chat timeout=~a~%" timeout)
-  (let* ((completions-jso (st-json::jso))
-         (message-array nil))
-    (when (stringp text-or-alist)
-      (setf text-or-alist `(("user" . ,text-or-alist))))
-    (loop  for (role . content) in text-or-alist
-           for n from 0 do
-             (let ((message-jso (jso)))
-               (pushjso "role" role message-jso)
-               (pushjso "content" content message-jso)
-               (push  message-jso message-array)))
-
-    (pushjso "model" model completions-jso)
-    (pushjso "messages" message-array completions-jso)
-    (pushjso "temperature" temperature completions-jso)
-    (pushjso "top_p" top-p completions-jso)
-    (pushjso "max_tokens" max-tokens completions-jso)
-    (pushjso "n" n completions-jso)
-    (pushjso "stop" stop completions-jso)
-    (pushjso "presence_penalty" presence-penalty completions-jso)
-    (pushjso "frequency_penalty" frequency-penalty completions-jso)
-    (pushjso "user" "anonymous" completions-jso)
-    (when functions (pushjso "functions" functions completions-jso))
-    (when function-call (pushjso "function_call" function-call completions-jso))
-;;;    (format t "~S~%" jso)
-    (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string completions-jso) :verbose verbose))
-           (choices (when resp (jso-val resp "choices")))
-           (err (when resp (jso-val resp "error")))
-           (messages (when choices (mapcar (lambda (choice) (jso-val choice "message")) choices)))
-           (contents (when messages (mapcar (lambda (message) (string-trim (format nil " ~%")
-                                                (jso-val message "content"))) messages)))
-           )
-      (setf resp
-            (cond (err `(,(jso-val err "message")))
-                  (contents contents)
-                  (t '("No text"))))
-      (cond ((and functions (string-equal "null" (car contents)))
-             (extract-arguments (car messages)))
-            ((equal output-format :text) (car resp)) (t resp)))))
-
-
 (defun call-openai (cmd &key
                           (method :get)
                           (content nil)
-                          (timeout 10)
+                          (timeout *openai-default-timeout*)
                           (content-type "application/json")
                           (extra-headers nil)
                           (query nil)
-                          (retries *default-openai-retries*)
-                          (delay *default-openai-delay*)
+                          (retries *openai-default-retries*)
+                          (delay *openai-default-initial-delay*)
                           (verbose nil))
   "Generic interface to all openai v1 API functions using do-http-request."
   (let ((uri (format nil "https://api.openai.com/v1/~a" cmd)))
@@ -111,53 +71,13 @@ text-or-alist can be either a simple string or a transcript in the form of an al
              (sleep delay)
              (call-openai cmd :method method :content content :timeout timeout :content-type content-type
                               :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
-            (t 
+            (t
+;;;             (format t "body=~a~%" body)
              (let ((jso (handler-case (read-json body)
                           (error (e)
                             (format t "~a: Unable to read json: ~a~%" e body)
                             (jso)))))
               jso))))))
-
-
-(defun chat (text &key
-                    (model *default-chat-model*)
-                    (max-tokens 2048)
-                    (temperature 0.8)
-                    (timeout 10)
-                    (presence-penalty 0.0)
-                    (frequency-penalty 0.0)
-                    (separator "")
-                    (stop "")
-                    (logprobs nil)
-                    (n 1)
-                    (output-format :text)
-                    (verbose nil)
-                    )
-  "Use this function for GPT-3 models ada, babbage, davinci.
-Simple chatbot function: say (chat \"Hello.\")"
-  (let* ((jso (jso))
-         (resp nil)
-         (choices nil)
-         (responses nil))
-    (pushjso "prompt" (format nil "~a~a" text separator) jso)
-    (pushjso "model" model jso)
-    (pushjso "max_tokens" max-tokens jso)
-    (pushjso "temperature" temperature jso)
-    (pushjso "presence_penalty" presence-penalty jso)
-    (pushjso "frequency_penalty" frequency-penalty jso)
-    (pushjso "stop" stop jso)
-    (when logprobs (pushjso "logprobs" logprobs jso))
-    (pushjso "n" n jso)
-;;;    (format t "jso=~a~%" (json-string jso))
-    (setf resp (call-openai "completions" :method :post :content (json-string jso)
-                                          :timeout timeout
-                                          :verbose verbose
-                                          ))
-    (setf choices (jso-val resp "choices"))
-    (setf responses (or (mapcar (lambda (u) (string-trim (format nil " ~%") (jso-val u "text"))) choices) '("No text")))
-    (when verbose (format t "jso=~S~%" resp))
-    (cond ((equal output-format :text) (car responses))
-          (t responses))))
 
 
 
@@ -177,7 +97,6 @@ Simple chatbot function: say (chat \"Hello.\")"
       (cdr (assoc "data" (st-json::jso-alist  jso) :test 'string=))))
     'string<))
   nil))
-
 
 
 
@@ -239,7 +158,7 @@ Simple chatbot function: say (chat \"Hello.\")"
 (defun fine-tune (file)
   "Start a fine-tuning process"
   (let ((jso (jso)))
-    (pushjso "model" *default-fine-tune-model* jso)
+    (pushjso "model" *openai-default-fine-tune-model* jso)
     (pushjso "training_file" file jso)
     (call-openai "fine-tunes" :method :post :content (json-string jso))))
 
@@ -334,65 +253,315 @@ Authorization: API-KEY
 ;;;    (format t "--- arguments=~S~%" arguments)
     (values arguments name)))
 
-(defun ask-for-list (text &key (model *default-ask-chat-model*) (verbose nil))
-  (let ((function-call (jso))
-        (function (jso))
-        (parameters (jso))
-        (properties (jso))
-        (array (jso))
-        (items (jso))
-        )
-    (pushjso "name" "array_of_strings" function-call)
-    (pushjso "type" "string" items)
-    (pushjso "items" items array)
-    (pushjso "type" "array" array)
-    (pushjso "description" "the list of items" array)
-    (pushjso "array" array properties)
-    (pushjso "properties" properties parameters)
-    (pushjso "type" "object" parameters)
-    (pushjso "parameters" parameters function)
-    (pushjso "description" "function to list an array of specified items"  function)
-    (pushjso "name" "array_of_strings" function)
-    (multiple-value-bind (arguments name)
-        (ask-chat text :model model :functions (list function) :verbose verbose :function-call function-call)
-;;;      (format t "arguments=~S name=~S~%" arguments name)
-      (handler-case
-      (cond ((null name) (list arguments))
-            (t
-             (let* (
-                    (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
-                    (response-list (jso-val jso "array")))
-;;;        (format t "arguments=~S~%" arguments)
-;;;        (format t "name=~S~%" name)
-               response-list)))
-        (error (e) (format t "~a~%" e) nil)))))
+(eval-when (compile load eval) 
+  (setq key-args-list
+    '(
+      (best-of *openai-default-best-of*)
+      (echo *openai-default-echo*)
+      (frequency-penalty *openai-default-frequency-penalty*)
+      (functions *openai-default-functions*)
+      (function-call *openai-default-function-call*)
+      (logit-bias *openai-default-logit-bias*)
+      (logprobs *openai-default-logprobs*)
+      (max-tokens *openai-default-max-tokens*)
+      (model *openai-default-ask-chat-model*)
+      (n *openai-default-n*)
+      (output-format *openai-default-output-format*)
+      (presence-penalty *openai-default-presence-penalty*)
+      (stop *openai-default-stop*)
+      (stream *openai-default-stream*)
+      (suffix *openai-default-suffix*)
+      (temperature *openai-default-temperature*)
+      (timeout *openai-default-timeout*)
+      (top-p *openai-default-top-p*)
+      (user  *openai-default-user*)
+      (verbose nil)
+      (top-n *openai-default-top-n*)
+      (min-score *openai-default-min-score*)
+      (vector-database-name llm::*default-vector-database-name*))
+      
+    key-args-signature
+    '(
+      :best-of best-of
+      :echo echo
+      :frequency-penalty frequency-penalty
+      :functions functions
+      :function-call function-call
+      :logit-bias logit-bias
+      :logprobs logprobs
+      :max-tokens max-tokens
+      :model model
+      :n n
+      :presence-penalty presence-penalty
+      :stop stop
+      :stream stream
+      :suffix suffix
+      :temperature temperature
+      :timeout timeout
+      :top-p top-p
+      :user user
+      :verbose verbose
+      :vector-database-name vector-database-name
+      :top-n top-n
+      :min-score min-score
+      :vector-database-name vector-database-name
+      :top-n top-n
+      :min-score min-score        
+      )
+      
+    key-args-pushjso
+    '(
+      (when best-of (pushjso "best_of" best-of jso))
+      (when echo (pushjso "echo" best-of jso))
+      (pushjso "frequency_penalty" frequency-penalty jso)
+      (when functions (pushjso "functions" functions jso))
+      (when function-call (pushjso "function_call" function-call jso))
+      (when logit-bias (pushjso "logit_bias" logit-bias jso))
+      (when logprobs (pushjso "logprobs" logit-bias jso))
+      (pushjso "max_tokens" max-tokens jso)
+      (pushjso "model" model jso)
+      (pushjso "n" n jso)
+      (pushjso "presence_penalty" presence-penalty jso)
+      (pushjso "stop" stop jso)
+      (pushjso "stream" stream jso)
+      (when suffix (pushjso "suffix" suffix jso))
+      (pushjso "temperature" temperature jso)
+      (pushjso "top_p" top-p jso)
+      (pushjso "user" user jso))))
 
-#+ignore(progn
-(mapcar (lambda (film)
-          (format t "~a~%" film)
-          (list film
-                (ask-chat (format nil "What year was ~a released?  State the year only."film))
-                (ask-chat (format nil "Name the director of ~a.  State the name only."film))
-                (ask-for-list (format nil "List the main performers in ~a."film))
-                (ask-for-list (format nil "List the major awards won by ~a."film) )
-                (ask-chat (format nil "Write a 50 word summary of the plot of ~a."film))))
-        (subseq (ask-for-list "List the top 10 highest rated classic films.") 0 9))
+
+  
+  
+(key-args-fun ask-chat
+"Use this function for ChatGPT API.
+ Model should be one of: gpt3-3.5-turbo, gpt3-3.5-turbo-0301 or gpt-4.
+ text-or-alist can be either a simple string or a transcript in the form of an alist
+ (role . content) ...) where role is one of  \"user\", \"system\", \"assistant\" or \"function\"."
+               `(let* ((jso (st-json::jso))
+                       (message-array nil))
+                  min-score  ;; unused var
+                  top-n      ;; unused var
+                  vector-database-name ;; unused var
+                  (when (stringp prompt-or-messages)
+                    (setf prompt-or-messages `(("user" . ,prompt-or-messages))))
+                  (loop  for (role . content) in prompt-or-messages
+                         for n from 0 do
+                           (let ((message-jso (jso)))
+                             (pushjso "role" role message-jso)
+                             (pushjso "content" content message-jso)
+                             (push  message-jso message-array)))
+                  (pushjso "messages" message-array jso)
+                  ,@key-args-pushjso
+
+;;;    (format t "~S~%" jso)
+                  (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string jso) :verbose verbose))
+                         (choices (when resp (jso-val resp "choices")))
+                         (err (when resp (jso-val resp "error")))
+                         (messages (when choices (mapcar (lambda (choice) (jso-val choice "message")) choices)))
+                         (contents (when messages (mapcar (lambda (message) (string-trim (format nil " ~%")
+                                                                                         (jso-val message "content"))) messages)))
+                         )
+                    (setf resp
+                          (cond (err `(,(jso-val err "message")))
+                                (contents contents)
+                                (t '("No text"))))
+                    (cond ((and functions (string-equal "null" (car contents)))
+                           (extract-arguments (car messages)))
+                          ((equal output-format :text) (car resp)) (t resp)))))
 
 
-(mapcar (lambda (scientist)
-          (format t "~a~%" scientist)
-          (list scientist
-                (ask-for-list (format nil "List the birth date and death date of ~a.  State the dates in YYYY-MM-DD form." scientist))
-                (ask-for-list (format nil "What are the main discoveries or inventions attributed to ~a?" scientist))))
-        (ask-for-list "Name the top 25 most important scientists in history."))
+
+(key-args-fun chat
+              "Use this function for GPT-3 models ada, babbage, davinci.
+ Simple chatbot function: say (chat \"Hello.\")"
+              `(let* ((jso (jso))
+                      (resp nil)
+                      (choices nil)
+                      (responses nil))
+                 vector-database-name ;; unused
+                 min-score ;; unused
+                 top-n ;; unused
+                 (setf model *openai-default-chat-model*)
+                 (pushjso "prompt" prompt-or-messages jso)
+                 ,@key-args-pushjso
+;;;    (format t "jso=~a~%" (json-string jso))
+                 (setf resp (call-openai "completions" :method :post :content (json-string jso)
+                                                       :timeout timeout
+                                                       :verbose verbose
+                                                       ))
+                 (setf choices (jso-val resp "choices"))
+                 (setf responses (or (mapcar
+                                      (lambda (u) (string-trim (format nil " ~%") (jso-val u "text"))) choices) '("No text")))
+                 (when verbose (format t "jso=~S~%" resp))
+                 (cond ((equal output-format :text) (car responses))
+                       (t responses))))
 
 
-(mapcar (lambda (state)
-          (format t "~a~%" state)
-          (list state
-                (ask-chat (format nil "What is the population of ~a?  Answer with a pure integer verbatim with no commas or punctuation." state))
-                (ask-chat (format nil "What is the area of ~a in square miles?  Answer with a pure integer verbatim with no commas or punctuation." state))
-                (ask-chat (format nil "What is the capital of the state of ~a?  Answer with the city name only." state))
-                ))
-        (ask-for-list "List 10 US states"))
-)
+
+
+
+
+
+
+(key-args-fun ask-for-list "" 
+              `(progn
+                 output-format ;;unused
+                (setf functions (read-json "[
+{'name':'array_of_strings',
+'description':'function to list an array of specified items',
+'parameters':
+  {'type':'object',
+   'properties':
+    {'array':
+      {'description':'the list of items',
+       'type':
+       'array',
+       'items':
+         {'type':'string'}
+}}}}]"))
+                (setf function-call (read-json "{'name':'array_of_strings'}"))
+                (multiple-value-bind (arguments name)
+                    (ask-chat prompt-or-messages ,@key-args-signature)
+                  (handler-case
+                      (cond ((null name) (list arguments))
+                            (t
+                             (let* (
+                                    (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
+                                    (response-list (jso-val jso "array")))
+                               response-list)))
+                    (error (e) (format t "~a~%" e) nil)))))
+
+
+(key-args-fun ask-for-map "" 
+              `(progn
+                 output-format ;; unused
+                 (setf function-call (read-json "{'name':'array_of_key_val'}"))
+                 (setf functions (read-json "[
+{'name':'array_of_key_val',
+'description':'function to list an array of key-value pairs.',
+'parameters':
+  {'type':'object',
+   'properties':
+    {'array':
+      {'description':'the list of key-value pairs',
+       'type':
+       'array',
+       'items':
+        {
+        'type': 'object',
+        'properties': {
+          'key': {
+            'type': 'string',
+            'description': 'Unique identifier of the object.'
+          },
+          'value': {
+            'type': 'string',
+            'description': 'Value associated with the object.'
+          }
+        }
+}}}}}]"))
+
+
+                 (multiple-value-bind (arguments name)
+                     (gpt::ask-chat prompt-or-messages ,@key-args-signature)
+                   (when verbose (format t "ask-for-map: arguments=~a name=~a~%" arguments name))
+                   (handler-case
+                       (cond ((null name) (list arguments))
+                             (t
+                              (let* (
+                                     (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
+                                     (response-list (jso-val jso "array")))
+                                (mapcar (lambda (u) (list (jso-val u "key") (jso-val u "value") )) response-list)
+                                ;;;response-list
+                                )))
+                     (error (e) (format t "~a~%" e) nil)))))
+
+
+
+
+(defun format-ask-my-documents-prompt (query id-content) 
+  (let* ((formatted-content (mapcar (lambda (u) (format nil "citation-id:~a content:'~a'" (car u) (cadr u))) id-content))
+         (prompt (format nil "Here is a list of citation IDs and content related to the query '~a':~%
+~{~a~%~}.
+Respond to the query '~a' as though you wrote the content.  Be brief.  You only have 20 seconds to reply.
+Place your response to the query in the 'response' field.
+Insert the list of citations whose content informed the repsonse into the 'citation_ids' array.
+" query formatted-content query)))
+  (setf prompt (remove-if (lambda (ch) (> (char-code ch) 127)) prompt))
+  prompt))
+
+
+
+(key-args-fun ask-my-documents 
+
+"The purpose of this function is to search a local knowledge base of documents for content that matches the query,
+then formulate a big prompt that combines this 'background info' with the original query, and return a response along with citations to the documents that
+              contributed to the query (but not necessarily all the documents that matched).  
+
+ask-my-documents implements the concept known as Retrieval Augmented Generation (RAG).
+
+This function creates a JSON object to tell OpenAI how we want its response structured.  Confusingly this feature is called 'function-calling' in the OpenAI documentation.  Basically it allows us to tell OpenAI that we want a JSON object of the form 
+
+{'response': 'the response to the query', 
+ 'citation_ids':[uri, uri1, ...]
+}
+              The function format-ask-my-documents-prompt formats the 'big prompt' from the matching documents plus the original query.  
+              It's broken out as a separate function in case we want to customize it in the initfile.
+"
+          `(progn
+                (when verbose (format t "ask-my-documents dir=~a~%" llm::*default-vector-database-dir*))
+                (let* ((query prompt-or-messages)
+                       (side-effect (when verbose (format t "database-name=~S dir=~S=~%" vector-database-name llm::*default-vector-database-dir*)))
+                       (vector-database (llm::read-vector-database vector-database-name :dir llm::*default-vector-database-dir* ))
+                       (side-effect (setf (llm::vector-database-embedder vector-database) 'gpt::embed))
+                       
+                       (matches (nn vector-database query :top-n top-n :min-score min-score))
+                       (side-effect (when verbose (format t "database=~S matches=~S top-n=~a min-score=~a~%" vector-database matches top-n min-score)))
+                       (score-table (make-hash-table :test 'string=))
+                       (original-text-table (make-hash-table :test 'string=))
+                       (id-content (mapcar (lambda (u)
+                                             (setf (gethash (car u) score-table) (cadr u))
+                                             (setf (gethash (car u) original-text-table) (caddr u))
+                                             (list (car u) (caddr u))) matches))
+                       (prompt (format-ask-my-documents-prompt query id-content)))
+
+
+                  (declare (ignore side-effect))
+                  output-format ;; unused
+                  
+
+                  (setf function-call (read-json "{'name':'response_citations'}"))
+                  (setf functions (read-json "[
+{'name':'response_citations',
+'description':'function to provide a response and a list of IDs of any content contributing to the reponse.',
+'parameters':
+  {'type':'object',
+   'properties':
+   {
+    'response': {
+            'type': 'string',
+            'description': 'The response to the query.'
+          },
+
+    'citation_ids':
+      {
+       'type':
+       'array',
+       'description':'the IDs of the content contributing to the response',
+       'items':
+        {
+          'type': 'string',
+          'description': 'an ID of content that contributed to the response'
+}}}}}]"))
+
+                  (handler-case
+                      (let* ((json-string-response
+                               (gpt::ask-chat prompt ,@key-args-signature))
+                             (json-response (read-json json-string-response))
+                             (text-response (jso-val json-response "response"))
+                             (citation-ids (jso-val json-response "citation_ids")))
+                        (mapcar (lambda (u) (list text-response (gethash u score-table) u (gethash u original-text-table)))
+                                citation-ids))
+                    (error (e) (format t "~a~%" e) nil)))))
+
+

@@ -10,13 +10,11 @@
     :components
     (
      (:file "llm")
+     (:file "util")
      (:file "vector-database")
      (:file "writing-floats")
-     (:file "embed")
+     (:file "embed" :depends-on ("util"))
      (:file "shortq")
-     (:file "util")
-     (:file "llama-cpp")
-     (:file "openai")))
+     (:file "llama-cpp" :depends-on ("util"))
+     (:file "openai" :depends-on ("util"))))
 
-
-     
