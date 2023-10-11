@@ -1,5 +1,7 @@
 ;; See the file "LICENSE" for the full license governing this code.
 
+#|
+;; not needed when found in agraph source
 #+(or (version= 10 1) (version= 11 0 beta))
 (sys:defpatch "acl-llm" 4
   "v4: fixed off-by-one error in shortq
@@ -9,6 +11,8 @@ v1: Function-calling API;
 v0: Initial release of the :acl-llm module."
   :type :system
   :post-loadable t)
+  |#
+
 
 (eval-when (compile load eval)
   (require :aserve)

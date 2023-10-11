@@ -125,6 +125,7 @@
           (t (make-array *llama-cpp-dimensions* :element-type 'single-float :initial-element 0.0)))))
 
 
+#|
 (defun sample-vector-database ()
   (let* ((dim *llama-cpp-dimensions*)
          (name *default-vector-database-name*)
@@ -149,3 +150,4 @@
 
 (defun t2 () (let ((vector-database (sample-vector-database)))
    (nn vector-database "Famous scientist" :embedder 'embed :min-score 0.0)))
+|#

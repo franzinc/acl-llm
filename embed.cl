@@ -21,6 +21,7 @@
           (t (make-array *ada-002-dimensions* :element-type 'single-float :initial-element 0.0)))))
 
 
+#|
 (defun sample-vector-database ()
   (declare (special *default-vector-database-name*))
   (let ((name *default-vector-database-name*)
@@ -47,3 +48,4 @@
 (defun t1 ()
   (let ((vector-database (sample-vector-database)))
     (nn vector-database "Famous Philosopher")))
+|#
