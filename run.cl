@@ -1,3 +1,7 @@
+
+(eval-when (compile load eval)
+  (require :agraph "/disk1/rsw/ag800/lib/agraph.fasl")
+  )
 (load "load.cl")
 (in-package :llama2)
 (setf *llama-cpp-python-api-protocol* (sys:getenv "ACL_LLM_LLAMA_CPP_PYTHON_API_PROTOCOL"))

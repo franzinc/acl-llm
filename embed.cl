@@ -4,27 +4,34 @@
 
 (eval-when (compile load eval)
   (setq key-args-list '((verbose nil)
+                        (log-progress t)
                         (model "text-embedding-ada-002")
                         (timeout 120))
   
-        key-args-signature '(:verbose verbose :model model :timeout timeout)))
+        key-args-signature '(:verbose verbose :log-progress log-progress :model model :timeout timeout)))
 
 
 (key-args-fun ask-embedding "" 
-                '(let* ((jso (jso)))
-                  (pushjso "input" prompt-or-messages jso)
-                  (pushjso "model" model jso)
-                  (call-openai "embeddings" :method :post :timeout timeout :verbose verbose
-                                            :content (json-string jso))))
+              '(let* ((jso (jso))
+                      (start-time (get-internal-real-time)))
+                (pushjso "input" prompt-or-messages jso)
+                (pushjso "model" model jso)
+                (let ((response   
+                        (call-openai "embeddings" :method :post :timeout timeout :verbose verbose
+                                                  :content (json-string jso))))
+                  (when log-progress
+                    (db.agraph.log:log-info :llm "Embed ~a ~a~%" prompt-or-messages (- (get-internal-real-time) start-time))
+;;;                    (format t "Embed ~a ~a~%" prompt-or-messages (- (get-internal-real-time) start-time))
+                    )
+                  response)))
 
 (key-args-fun embed ""
-                `(progn 
-                  (when verbose (format t "Embed '~a'.~%" prompt-or-messages))
-                  (let* ((data (car (jso-val (ask-embedding prompt-or-messages ,@key-args-signature) "data")))
-                         (embedding (when data (jso-val data "embedding"))))
-                    (cond (embedding (setf embedding (mapcar (lambda (u) (coerce u 'single-float)) embedding))
-                                     (coerce embedding 'single-float-array))
-                          (t (make-array *ada-002-dimensions* :element-type 'single-float :initial-element 0.0))))))
+              `(progn
+                 (let* ((data (car (jso-val (ask-embedding prompt-or-messages ,@key-args-signature) "data")))
+                        (embedding (when data (jso-val data "embedding"))))
+                   (cond (embedding (setf embedding (mapcar (lambda (u) (coerce u 'single-float)) embedding))
+                                    (coerce embedding 'single-float-array))
+                         (t (make-array *ada-002-dimensions* :element-type 'single-float :initial-element 0.0))))))
 
 
 #|
