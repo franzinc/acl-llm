@@ -3,7 +3,7 @@
 mlisp      ?= /fi/cl/10.1/bin/mlisp-64
 mlisp_args ?=
 
-FASL_FILES = llm.fasl vector-database.fasl writing-floats.fasl embed.fasl shortq.fasl \
+FASL_FILES = llm.fasl vector-database.fasl writing-floats.fasl acl-specific.fasl embed.fasl shortq.fasl \
              util.fasl llama-cpp.fasl openai.fasl
 
 fasls:

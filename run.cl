@@ -1,7 +1,4 @@
-
-(eval-when (compile load eval)
-  (require :agraph "/disk1/rsw/ag800/lib/agraph.fasl")
-  )
+(push :acl-llm-build *features*)
 (load "load.cl")
 (in-package :llama2)
 (setf *llama-cpp-python-api-protocol* (sys:getenv "ACL_LLM_LLAMA_CPP_PYTHON_API_PROTOCOL"))
@@ -10,5 +7,4 @@
 (in-package :gpt)
 (setf *default-vector-database-dir* (sys:getenv "ACL_LLM_DEFAULT_VECTOR_DATABASE_DIR"))
 (set-openai-api-key (sys:getenv "ACL_LLM_OPENAI_API_KEY"))
-
 

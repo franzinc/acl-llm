@@ -344,7 +344,7 @@ Authorization: API-KEY
                   vector-database-name ;; unused var
                   (when (stringp prompt-or-messages)
                     (setf prompt-or-messages `(("user" . ,prompt-or-messages))))
-                  (loop  for (role . content) in prompt-or-messages
+                  (loop  for (role . content) in (reverse prompt-or-messages)
                          for n from 0 do
                            (let ((message-jso (jso)))
                              (pushjso "role" role message-jso)
