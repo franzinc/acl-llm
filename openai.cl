@@ -317,7 +317,7 @@ Authorization: API-KEY
       (when functions (pushjso "functions" functions jso))
       (when function-call (pushjso "function_call" function-call jso))
       (when logit-bias (pushjso "logit_bias" logit-bias jso))
-      (when logprobs (pushjso "logprobs" logit-bias jso))
+      (when logprobs (pushjso "logprobs" logprobs jso)) ;;; small bug uncovered while documentating
       (pushjso "max_tokens" max-tokens jso)
       (pushjso "model" model jso)
       (pushjso "n" n jso)
@@ -565,3 +565,42 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                     (error (e) (format t "~a~%" e) nil)))))
 
 
+
+;;;(ask-for-table "Create a table of letters, the order of each letter, and indicate whether it is a vowel or not.")
+;;;(ask-for-table "10 common English verbs and their infinitive, past, present, future, past perfect and gerund forms.")
+
+(key-args-fun ask-for-table "ask-for-table uses function calling to return table of values as a list of lists, where each inner list represents one row of the table."
+              `(progn
+                 output-format ;; unused
+                 (setf function-call (read-json "{'name':'table'}"))
+                 (setf functions (read-json "[
+{'name':'table',
+'description':'function to return tabular data.',
+'parameters':
+  {'type':'object',
+   'properties':
+    {'rows':
+      {'description':'the list of table rows',
+       'type':
+       'array',
+       'items':
+        {
+        'type': 'array',
+        'items': {
+           'type': 'string',
+           'description' : 'the value in each column'}
+}}}}}]"))
+
+
+                 (multiple-value-bind (arguments name)
+                     (gpt::ask-chat prompt-or-messages ,@key-args-signature)
+                   (when verbose (format t "ask-for-table: arguments=~a name=~a~%" arguments name))
+                   (handler-case
+                       (cond ((null name) (list arguments))
+                             (t
+                              (let* (
+                                     (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
+                                     (response-list (jso-val jso "rows")))
+                                response-list
+                                )))
+                     (error (e) (format t "~a~%" e) nil)))))

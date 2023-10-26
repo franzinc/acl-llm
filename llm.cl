@@ -5,7 +5,8 @@
 ;; not needed when found in agraph source
 #+(or (version= 10 1) (version= 11 0 beta))
 (sys:defpatch "acl-llm" 5
-  "v5: LLAMA2 API refinement
+"
+v5: ask-for-table added/LLAMA2 API refinement
 v4: fixed off-by-one error in shortq
 v3: code to work with LLM embeddings
 v2: fix interaction between :output-format and :function in ask-chat;
@@ -102,6 +103,7 @@ v0: Initial release of the :acl-llm module."
    #:ask-chat
    #:ask-embed
    #:ask-for-list
+   #:ask-for-table   
    #:call-oopenai
    #:cancel-fine-tune
    #:chat
