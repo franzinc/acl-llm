@@ -135,19 +135,29 @@
         (setf sum (+ sum (* diff diff)))))
     sum))
 
-(defun nn (vector-database text &key (min-score 0.8) (top-n 10) (similarity 'dotproduct)) ;;; #'simdot::simdot))
-  "Find the top-n nearest neighbors in the database with match score at least min-score."
-  (let ((shortq (init-shortq min-score top-n 'cadr))
-        (embed (funcall (vector-database-embedder vector-database) text)))
-    (loop for item in (vector-database-property-vectors vector-database)
-          for vec in  (vector-database-embedding-vectors vector-database) do
-            (assert (= (length vec) (length embed)))
-            (destructuring-bind (id original-text . properties) item
-              (let ((score (funcall similarity embed vec)))
-;;;                (assert (<= score  1.0) (score label) (log-llm "score=~a text=~a~%" score text))
-                (insert-shortq-if shortq `(,id ,score ,original-text ,@properties)))))
-    (shortq-item-pq shortq)))
 
+(defun nn (vector-database text &key (min-score 0.8) (top-n 10) (similarity 'dotproduct) (verbose nil)) ;;; (similarity 'simdott::simdot)
+  "Find the top-n nearest neighbors in the database with match score at least min-score."
+  (let ((shortq (init-shortq min-score top-n 'cadr)))
+    (handler-case 
+        (multiple-value-bind (embed error-message) (funcall (vector-database-embedder vector-database) text)
+          (when verbose (log-llm "nn: error-message=~a~%" error-message))
+          (when (null (vector-database-property-vectors vector-database))
+            (setf error-message (format nil "Vector store ~a is empty." (vector-database-name vector-database))))
+          (when verbose (log-llm "nn: vector-database=~a~%" vector-database)
+                (log-llm "nn error-message=~a~%" error-message))
+          (cond (error-message (handle-llm-error "nn" error-message (insert-shortq-if shortq `("error" ,min-score ,error-message))))
+                (t 
+                 (loop for item in (vector-database-property-vectors vector-database)
+                       for vec in (vector-database-embedding-vectors vector-database) do
+                         (assert (= (length vec) (length embed)))
+                         (destructuring-bind (id original-text . properties) item
+                           (let ((score (funcall similarity embed vec)))
+;;;                (assert (<= score  1.0) (score label) (log-llm "score=~a text=~a~%" score text))
+                             (insert-shortq-if shortq `(,id ,score ,original-text ,@properties))))))))
+
+      (error (e) (handle-llm-error "nn" (princ-to-string e) (insert-shortq-if shortq `("error" ,min-score ,(princ-to-string e))))))
+     (shortq-item-pq shortq)))
 #|
 (typep (aref (coerce (embed "Hello") 'array) 0) 'single-float)
 *read-default-float-format*

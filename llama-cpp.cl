@@ -266,7 +266,7 @@
                                    )))
                     (handler-case
                         (read-json response)
-                      (error (e) (declare (ignore e)) nil))))
+                      (error (e) (declare (ignore e)) (jso)))))
 
 
 
@@ -302,15 +302,29 @@
                       nil)))
 
 (key-args-fun embed "" 
-                `(progn (when verbose (log-llm "Embed '~a'.~%" prompt-or-messages))
-                        (let ((embedding (llama2::ask-llama2-embeddings prompt-or-messages ,@key-args-signature)))
-                          (cond (embedding
-                                 (cond (normalize (let ((mag (mag embedding)))
-                                                    (setf embedding (mapcar (lambda (u) (/ u mag)) embedding))))
-                                       (t (setf embedding (mapcar (lambda (u) (coerce u 'single-float)) embedding))))
-                                 (setf embedding (coerce embedding 'single-float-array))
-                                 embedding)
-                                (t (make-array llama2::*llama-cpp-dimensions* :element-type 'single-float :initial-element 0.0))))))
+              `(progn (when verbose (log-llm "Embed '~a'.~%" prompt-or-messages))
+                      (let ((error-message nil)
+                            (embedding nil))
+                        (setf embedding (handler-case (llama2::ask-llama2-embeddings prompt-or-messages ,@key-args-signature)
+                                          (error (e) (setf error-message (format nil "API error on ~a://~a:~a: ~a~%"
+                                                                                 *llama-cpp-python-api-protocol*
+                                                                                 *llama-cpp-python-api-host*
+                                                                                 *llama-cpp-python-api-port*
+                                                                                 e))
+                                            nil)))
+                        (cond (embedding
+                               (cond (normalize (let ((mag (mag embedding)))
+                                                  (setf embedding (mapcar (lambda (u) (/ u mag)) embedding))))
+                                     (t (setf embedding (mapcar (lambda (u) (coerce u 'single-float)) embedding))))
+                               (setf embedding (coerce embedding 'single-float-array)))
+                              (t (setf embedding (make-array llama2::*llama-cpp-dimensions* :element-type 'single-float :initial-element 0.0))
+                                 (when (null error-message) (setf  error-message (format nil "Something went wrong with llama2-cpp on ~a://~a:~a: null embedding~%"
+                                                                                         *llama-cpp-python-api-protocol*
+                                                                                         *llama-cpp-python-api-host*
+                                                                                         *llama-cpp-python-api-port*)))))
+                        (values embedding error-message))))
+                          
+
 
 
 

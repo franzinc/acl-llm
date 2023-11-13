@@ -5,45 +5,44 @@
 (defvar *serp-default-timeout* 120)
 (defvar *serp-default-retries* 4)
 (defvar *serp-default-initial-delay* 0.25)
+(defvar *serp-default-top-n* 10)
+(defvar *serp-api-url* "https://serpapi.com")
 
 (defun call-serp (cmd &key
-                          (method :get)
-                          (content nil)
-                          (timeout *serp-default-timeout*)
-                          (content-type "application/json")
-                          (extra-headers nil)
-                          (query nil)
-                          (retries *serp-default-retries*)
-                          (delay *serp-default-initial-delay*)
-                          (verbose nil))
+                        (method :get)
+                        (content nil)
+                        (timeout *serp-default-timeout*)
+                        (content-type "application/json")
+                        (extra-headers nil)
+                        (query nil)
+                        (retries *serp-default-retries*)
+                        (delay *serp-default-initial-delay*)
+                        (verbose nil))
   "Generic interface to all openai SERP API functions using do-http-request."
-  (let ((uri (format nil "https://serpapi.com/~a/" cmd)))
-    (when verbose (log-llm "content=~S~%" content))
-    (multiple-value-bind (body code headers page socket req)
-        (net.aserve.client:do-http-request
-          uri
-;;;          :headers `(,@extra-headers ("Authorization" . ,(format nil "Bearer ~a" *serp-api-key*)))
-          :content content
-          :content-type content-type
-          :timeout timeout
-          :query query
-          :method method)
-      (declare (ignore req socket page))
-      (when verbose
-        (log-llm "headers=~S~%" headers)
-        (log-llm "body=~S~%" body)
-        (log-llm "code=~a~%" code))
-      (cond ((and (= code 429) (> retries 0)) ;;; HTTP 429 API rate limit exceeded, retry with exponential backoff
-             (sleep delay)
-             (call-serp cmd :method method :content content :timeout timeout :content-type content-type
-                              :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
-            (t
-;;;             (log-llm "body=~a~%" body)
-             (let ((jso (handler-case (read-json body)
-                          (error (e)
-                            (log-llm "~a: Unable to read json: ~a~%" e body)
-                            (jso)))))
-              jso))))))
+  (handler-case  
+      (let ((uri (format nil "~a/~a" *serp-api-url* cmd)))
+;;;        (log-llm "uri=~a~%" uri)
+        (when verbose (log-llm "content=~S~%" content))
+        (multiple-value-bind (body code headers page socket req)
+            (net.aserve.client:do-http-request
+              uri
+              :content content
+              :content-type content-type
+              :timeout timeout
+              :query query
+              :method method)
+          (declare (ignore req socket page))
+          (when verbose
+            (log-llm "headers=~S~%" headers)
+            (log-llm "body=~S~%" body)
+            (log-llm "code=~a~%" code))
+          (cond ((and (= code 429) (> retries 0)) ;;; HTTP 429 API rate limit exceeded, retry with exponential backoff
+                 (sleep delay)
+                 (call-serp cmd :method method :content content :timeout timeout :content-type content-type
+                                :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
+                ((or (= code 401) (and (>= code 200) (< code 300))) (read-json body))                
+                (t (pushjso "error" (format nil "API call to ~a returned HTTP ~a." uri code) (jso))))))
+    (error (e) (pushjso "error" (princ-to-string e) (jso)))))
 
 
 
@@ -104,7 +103,7 @@ e.g. a path-branch ending in [description] comes before one ending in [snippet]"
             ((member key exclude-fields :test 'string=))
             ((member key ordered-error-fields :test 'string=)
              (dolist (value value-list)
-               (setf table-rows (insert-row-in-branch-order (list value "https://serpapi.com" path-branch) table-rows ordered-error-fields))
+               (handle-llm-error "traverse-serp-jso" value (setf table-rows (insert-row-in-branch-order (list value "https://serpapi.com" path-branch) table-rows ordered-error-fields)))
                ))
             ((member key ordered-include-fields :test 'string=)
              (when (match-re path-regex path-branch)
@@ -133,11 +132,13 @@ e.g. a path-branch ending in [description] comes before one ending in [snippet]"
 ;; (mapcar 'car (ask-serp "What is the top news headline today?" :top-n 5 :path-regex "top_stories"))
 (defun ask-serp (query-phrase &key ((:verbose verbose) nil)
                                 ((:path-regex path-regex) ".")
-                                ((:top-n top-n) nil)
+                                ((:timeout timeout) *serp-default-timeout*)
+                                ((:top-n top-n) *serp-default-top-n*)
                                 ((:ordered-include-fields ordered-include-fields) llm::*serp-ordered-include-fields*)
                                 ((:ordered-error-fields ordered-error-fields) '("error"))
                                 ((:exclude-fields exclude-fields) llm::*serp-exclude-fields*))
   (let* ((jso (call-serp "search.json"
+                         :timeout timeout
                          :query
                          `(("q" . ,query-phrase)
                            ("api_key" . ,*serp-api-key*)
@@ -150,6 +151,7 @@ e.g. a path-branch ending in [description] comes before one ending in [snippet]"
                                          :exclude-fields exclude-fields)))
     (when top-n (setf table-rows (subseq table-rows 0 (min top-n (length table-rows)))))
     table-rows))
+
 
 (defun set-serp-api-key (key)
   (setf *serp-api-key* key))

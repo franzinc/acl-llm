@@ -16,21 +16,25 @@
                       (start-time (get-internal-real-time)))
                 (pushjso "input" prompt-or-messages jso)
                 (pushjso "model" model jso)
-                (let ((response
+                (let* ((response
                         (call-openai "embeddings" :method :post :timeout timeout :verbose verbose
-                                                  :content (json-string jso))))
+                                                  :content (json-string jso)))
+                       (error (jso-val response "error" ))
+                       (error-message (when error (jso-val error "message"))))
+                  (when error-message (log-llm "error-message=~a~%" error-message))
                   (when log-progress
                     (log-llm "Embed ~a ~a~%" prompt-or-messages (- (get-internal-real-time) start-time))
                     )
-                  response)))
+                  (values response error-message))))
 
 (key-args-fun embed ""
-              `(progn
-                 (let* ((data (car (jso-val (ask-embedding prompt-or-messages ,@key-args-signature) "data")))
+              `(multiple-value-bind (jso error-message) (ask-embedding prompt-or-messages ,@key-args-signature)
+                 (let* ((data (car (jso-val jso "data")))
                         (embedding (when data (jso-val data "embedding"))))
                    (cond (embedding (setf embedding (mapcar (lambda (u) (coerce u 'single-float)) embedding))
-                                    (coerce embedding 'single-float-array))
-                         (t (make-array *ada-002-dimensions* :element-type 'single-float :initial-element 0.0))))))
+                                    (setf embedding (coerce embedding 'single-float-array)))
+                         (t (setf embedding (make-array *ada-002-dimensions* :element-type 'single-float :initial-element 0.0))))
+                   (values embedding error-message))))
 
 
 #|

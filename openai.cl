@@ -3,7 +3,7 @@
 
 ;; call set-openapi-key before calling any of these functions
 (defvar *openai-api-key* "missing")
-(defvar *openai-default-ask-chat-model* "gpt-4")
+(defvar *openai-default-ask-chat-model* "gpt-3.5-turbo")
 (defvar *openai-default-chat-model* "text-davinci-003")
 (defvar *openai-default-max-tokens* 2048)
 
@@ -30,7 +30,7 @@
 (defvar *openai-default-user* "anonymous")
 (defvar *openai-default-min-score* 0.0)
 (defvar *openai-default-top-n* 10)
-
+(defvar *openai-api-url* "https://api.openai.com/v1")
 
 (defconstant *ignore-chars*
     (make-array 2 :element-type 'character
@@ -51,33 +51,34 @@
                           (delay *openai-default-initial-delay*)
                           (verbose nil))
   "Generic interface to all openai v1 API functions using do-http-request."
-  (let ((uri (format nil "https://api.openai.com/v1/~a" cmd)))
-    (when verbose (log-llm "content=~S~%" content))
-    (multiple-value-bind (body code headers page socket req)
-        (net.aserve.client:do-http-request
-          uri
-          :headers `(,@extra-headers ("Authorization" . ,(format nil "Bearer ~a" *openai-api-key*)))
-          :content content
-          :content-type content-type
-          :timeout timeout
-          :query query
-          :method method)
-      (declare (ignore req socket page))
-      (when verbose
-        (log-llm "headers=~S~%" headers)
-        (log-llm "body=~S~%" body)
-        (log-llm "code=~a~%" code))
-      (cond ((and (= code 429) (> retries 0)) ;;; HTTP 429 API rate limit exceeded, retry with exponential backoff
-             (sleep delay)
-             (call-openai cmd :method method :content content :timeout timeout :content-type content-type
-                              :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
-            (t
-;;;             (log-llm "body=~a~%" body)
-             (let ((jso (handler-case (read-json body)
-                          (error (e)
-                            (log-llm "~a: Unable to read json: ~a~%" e body)
-                            (jso)))))
-              jso))))))
+  (handler-case
+      (let ((uri (format nil "~a/~a" *openai-api-url* cmd)))
+        (when verbose (log-llm "content=~S~%" content))
+        (multiple-value-bind (body code headers page socket req)
+            (net.aserve.client:do-http-request
+              uri
+              :headers `(,@extra-headers ("Authorization" . ,(format nil "Bearer ~a" *openai-api-key*)))
+              :content content
+              :content-type content-type
+              :timeout timeout
+              :query query
+              :method method)
+          (declare (ignore req socket page))
+          (when verbose
+            (log-llm "headers=~S~%" headers)
+            (log-llm "body=~S~%" body)
+            (log-llm "code=~a~%" code))
+;;; See https://platform.openai.com/docs/guides/error-codes/api-errors
+;;; 429 API rate limit exceeded, retry with exponential backoff
+;;; 503 - The engine is currently overloaded, please try again later
+;;; 401 - various errors, JSON contains [error][message] path.         
+          (cond ((and (member code '(429 503)) (> retries 0)) 
+                 (sleep delay)
+                 (call-openai cmd :method method :content content :timeout timeout :content-type content-type
+                                  :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
+                ((or (= code 401) (and (>= code 200) (< code 300))) (read-json body))
+                (t (pushjso "error" (pushjso "message" (format nil "API call to ~a returned HTTP ~a." uri code) (jso)) (jso))))))
+    (error (e) (pushjso "error" (pushjso "message" (princ-to-string e) (jso)) (jso)))))
 
 
 
@@ -241,19 +242,19 @@ Authorization: API-KEY
 
 
 
-(defun extract-arguments (message)
+(defun extract-json-text-and-function-name (message)
 ;;;  (log-llm "--- message=~s~%" message)
 ;;;  (log-llm "--- function_call=~S~%" (jso-val message "function_call"))
 ;;;  (log-llm "--- arguments=~S~%" (jso-val (jso-val message "function_call") "arguments"))
 ;;;  (log-llm "content=~S~%" (jso-val message "content"))
   (let* ((function-call (or (jso-val message "function_call") (jso)))
-         (name (jso-val function-call "name"))
-         (arguments (or (jso-val function-call "arguments") "{}")))
+         (function-name (jso-val function-call "name"))
+         (json-text (or (jso-val function-call "arguments") "{}")))
 ;;;    (log-llm "--- name=~S~%" name)
 ;;;    (log-llm "--- arguments=~S~%" arguments)
-    (values arguments name)))
+    (values json-text function-name)))
 
-(eval-when (compile load eval) 
+(eval-when (compile load eval)
   (setq key-args-list
     '(
       (best-of *openai-default-best-of*)
@@ -279,7 +280,7 @@ Authorization: API-KEY
       (top-n *openai-default-top-n*)
       (min-score *openai-default-min-score*)
       (vector-database-name llm::*default-vector-database-name*))
-      
+
     key-args-signature
     '(
       :best-of best-of
@@ -306,9 +307,9 @@ Authorization: API-KEY
       :min-score min-score
       :vector-database-name vector-database-name
       :top-n top-n
-      :min-score min-score        
+      :min-score min-score
       )
-      
+
     key-args-pushjso
     '(
       (when best-of (pushjso "best_of" best-of jso))
@@ -330,14 +331,15 @@ Authorization: API-KEY
       (pushjso "user" user jso))))
 
 
-  
-  
+
+
 (key-args-fun ask-chat
 "Use this function for ChatGPT API.
  Model should be one of: gpt3-3.5-turbo, gpt3-3.5-turbo-0301 or gpt-4.
  text-or-alist can be either a simple string or a transcript in the form of an alist
  (role . content) ...) where role is one of  \"user\", \"system\", \"assistant\" or \"function\"."
-               `(let* ((jso (st-json::jso))
+              `(handler-case
+                   (let* ((jso (st-json::jso))
                        (message-array nil))
                   min-score  ;; unused var
                   top-n      ;; unused var
@@ -357,17 +359,20 @@ Authorization: API-KEY
                   (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string jso) :verbose verbose))
                          (choices (when resp (jso-val resp "choices")))
                          (err (when resp (jso-val resp "error")))
+                         (error-message (when err (jso-val err "message")))
                          (messages (when choices (mapcar (lambda (choice) (jso-val choice "message")) choices)))
                          (contents (when messages (mapcar (lambda (message) (string-trim (format nil " ~%")
                                                                                          (jso-val message "content"))) messages)))
                          )
                     (setf resp
-                          (cond (err `(,(jso-val err "message")))
+                          (cond (error-message (handle-llm-error "ask-chat" error-message (list error-message)))
                                 (contents contents)
                                 (t '("No text"))))
                     (cond ((and functions (string-equal "null" (car contents)))
-                           (extract-arguments (car messages)))
-                          ((equal output-format :text) (car resp)) (t resp)))))
+                           (extract-json-text-and-function-name (car messages)))
+                          ((equal output-format :text) (car resp))
+                          (t resp))))
+                 (error (e) (handle-llm-error "ask-chat" (princ-to-string e) (list (princ-to-string e))))))
 
 
 
@@ -403,10 +408,10 @@ Authorization: API-KEY
 
 
 
-(key-args-fun ask-for-list "" 
+(key-args-fun ask-for-list ""
               `(progn
                  output-format ;;unused
-                (setf functions (read-json "[
+                 (setf functions (read-json "[
 {'name':'array_of_strings',
 'description':'function to list an array of specified items',
 'parameters':
@@ -419,20 +424,20 @@ Authorization: API-KEY
        'items':
          {'type':'string'}
 }}}}]"))
-                (setf function-call (read-json "{'name':'array_of_strings'}"))
-                (multiple-value-bind (arguments name)
-                    (ask-chat prompt-or-messages ,@key-args-signature)
-                  (handler-case
-                      (cond ((null name) (list arguments))
-                            (t
-                             (let* (
-                                    (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
-                                    (response-list (jso-val jso "array")))
-                               response-list)))
-                    (error (e) (log-llm "~a~%" e) nil)))))
+                 (setf function-call (read-json "{'name':'array_of_strings'}"))
+                 (handler-case                 
+                     (multiple-value-bind (json-text function-name)
+                         (ask-chat prompt-or-messages ,@key-args-signature)
+                       (cond ((null function-name) (handle-llm-error "ask-for-list" json-text (list json-text))) ;;; this should not happen
+                             (t
+                              (let* (
+                                     (jso (read-json json-text)) ;;; json-text is JSON text inside a JSON object
+                                     (response-list (jso-val jso "array")))
+                                response-list))))
+                   (error (e) (handle-llm-error "ask-for-list" (princ-to-string e) (list (princ-to-string e)))))))
 
 
-(key-args-fun ask-for-map "" 
+(key-args-fun ask-for-map ""
               `(progn
                  output-format ;; unused
                  (setf function-call (read-json "{'name':'array_of_key_val'}"))
@@ -460,26 +465,23 @@ Authorization: API-KEY
           }
         }
 }}}}}]"))
-
-
-                 (multiple-value-bind (arguments name)
-                     (gpt::ask-chat prompt-or-messages ,@key-args-signature)
-                   (when verbose (log-llm "ask-for-map: arguments=~a name=~a~%" arguments name))
-                   (handler-case
-                       (cond ((null name) (list arguments))
+                 (handler-case                 
+                     (multiple-value-bind (json-text function-name)
+                         (gpt::ask-chat prompt-or-messages ,@key-args-signature)
+                       (when verbose (log-llm "ask-for-map: json-text=~a name=~a~%" json-text function-name))
+                       (cond ((null function-name) (list (list json-text nil)))
                              (t
                               (let* (
-                                     (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
+                                     (jso (read-json json-text)) ;;; json-text is JSON text inside a JSON object
                                      (response-list (jso-val jso "array")))
                                 (mapcar (lambda (u) (list (jso-val u "key") (jso-val u "value") )) response-list)
-                                ;;;response-list
-                                )))
-                     (error (e) (log-llm "~a~%" e) nil)))))
+                                ))))
+                   (error (e) (list (list (princ-to-string e) nil))))))
 
 
 
 
-(defun format-ask-my-documents-prompt (query id-content) 
+(defun format-ask-my-documents-prompt (query id-content)
   (let* ((formatted-content (mapcar (lambda (u) (format nil "citation-id:~a content:'~a'" (car u) (cadr u))) id-content))
          (prompt (format nil "Here is a list of citation IDs and content related to the query '~a':~%
 ~{~a~%~}.
@@ -492,46 +494,42 @@ Insert the list of citations whose content informed the response into the 'citat
 
 
 
-(key-args-fun ask-my-documents 
+(key-args-fun ask-my-documents
 
-"The purpose of this function is to search a local knowledge base of documents for content that matches the query,
+              "The purpose of this function is to search a local knowledge base of documents for content that matches the query,
 then formulate a big prompt that combines this 'background info' with the original query, and return a response along with citations to the documents that
-              contributed to the query (but not necessarily all the documents that matched).  
+              contributed to the query (but not necessarily all the documents that matched).
 
 ask-my-documents implements the concept known as Retrieval Augmented Generation (RAG).
 
-This function creates a JSON object to tell OpenAI how we want its response structured.  Confusingly this feature is called 'function-calling' in the OpenAI documentation.  Basically it allows us to tell OpenAI that we want a JSON object of the form 
+This function creates a JSON object to tell OpenAI how we want its response structured.  Confusingly this feature is called 'function-calling' in the OpenAI documentation.  Basically it allows us to tell OpenAI that we want a JSON object of the form
 
-{'response': 'the response to the query', 
+{'response': 'the response to the query',
  'citation_ids':[uri, uri1, ...]
 }
-              The function format-ask-my-documents-prompt formats the 'big prompt' from the matching documents plus the original query.  
+              The function format-ask-my-documents-prompt formats the 'big prompt' from the matching documents plus the original query.
               It's broken out as a separate function in case we want to customize it in the initfile.
 "
-          `(progn
-                (when verbose (log-llm "ask-my-documents dir=~a~%" llm::*default-vector-database-dir*))
-                (let* ((query prompt-or-messages)
-                       (side-effect (when verbose (log-llm "database-name=~S dir=~S=~%" vector-database-name llm::*default-vector-database-dir*)))
-                       (vector-database (llm::read-vector-database vector-database-name :dir llm::*default-vector-database-dir* ))
-                       (side-effect (setf (llm::vector-database-embedder vector-database) 'gpt::embed))
-                       
-                       (matches (nn vector-database query :top-n top-n :min-score min-score))
-                       (side-effect (when verbose (log-llm "database=~S matches=~S top-n=~a min-score=~a~%" vector-database matches top-n min-score)))
-                       (score-table (make-hash-table :test 'string=))
-                       (original-text-table (make-hash-table :test 'string=))
-                       (id-content (mapcar (lambda (u)
-                                             (setf (gethash (car u) score-table) (cadr u))
-                                             (setf (gethash (car u) original-text-table) (caddr u))
-                                             (list (car u) (caddr u))) matches))
-                       (prompt (format-ask-my-documents-prompt query id-content)))
-
-
-                  (declare (ignore side-effect))
-                  output-format ;; unused
-                  
-
-                  (setf function-call (read-json "{'name':'response_citations'}"))
-                  (setf functions (read-json "[
+              `(handler-case
+                   (progn
+                     (when verbose (log-llm "ask-my-documents dir=~a~%" llm::*default-vector-database-dir*))
+                     (let* ((query prompt-or-messages)
+                            (side-effect (when verbose (log-llm "database-name=~S dir=~S=~%" vector-database-name llm::*default-vector-database-dir*)))
+                            (vector-database (llm::read-vector-database vector-database-name :dir llm::*default-vector-database-dir* ))
+                            (side-effect (setf (llm::vector-database-embedder vector-database) 'gpt::embed))
+                            (matches (nn vector-database query :top-n top-n :min-score min-score :verbose verbose))
+                            (side-effect (when verbose (log-llm "database=~S matches=~S top-n=~a min-score=~a~%" vector-database matches top-n min-score)))
+                            (score-table (make-hash-table :test 'string=))
+                            (original-text-table (make-hash-table :test 'string=))
+                            (id-content (mapcar (lambda (u)
+                                                  (setf (gethash (car u) score-table) (cadr u))
+                                                  (setf (gethash (car u) original-text-table) (caddr u))
+                                                  (list (car u) (caddr u))) matches))
+                            (prompt (format-ask-my-documents-prompt query id-content)))
+                       (declare (ignore side-effect)
+                                (ignore output-format)) ;; unused
+                       (setf function-call (read-json "{'name':'response_citations'}"))
+                       (setf functions (read-json "[
 {'name':'response_citations',
 'description':'function to provide a response and a list of IDs of any content contributing to the reponse.',
 'parameters':
@@ -554,16 +552,25 @@ This function creates a JSON object to tell OpenAI how we want its response stru
           'description': 'an ID of content that contributed to the response'
 }}}}}]"))
 
-                  (handler-case
-                      (let* ((json-string-response
-                               (gpt::ask-chat prompt ,@key-args-signature))
-                             (json-response (read-json json-string-response))
-                             (text-response (jso-val json-response "response"))
-                             (citation-ids (jso-val json-response "citation_ids")))
-                        (mapcar (lambda (u) (list text-response (gethash u score-table) u (gethash u original-text-table)))
-                                citation-ids))
-                    (error (e) (log-llm "~a~%" e) nil)))))
-
+                       (let ((response
+                               (cond ((string= (caar matches) "error")
+                                      (handle-llm-error "ask-my-documents"
+                                                        (nth 2 (car matches))
+                                                        (list (list (nth 2 (car matches)) 0.0 "error" "error"))))
+                                     (t
+                                      (let* ((json-string-response
+                                               (gpt::ask-chat prompt ,@key-args-signature))
+                                             (json-response (read-json json-string-response))
+                                             (text-response (jso-val json-response "response"))
+                                             (citation-ids (jso-val json-response "citation_ids")))
+                                        (mapcar (lambda (u) (list text-response (gethash u score-table) u (gethash u original-text-table)))
+                                                citation-ids)
+                                        )))))
+;;;(log-llm "ask-my-documents response: ~a~%" response)
+                         response)))
+                 (error (e) (handle-llm-error "ask-my-documents"
+                                              (princ-to-string e)
+                                              (list (list (princ-to-string e) 0.0 "error" "error"))))))
 
 
 ;;;(ask-for-table "Create a table of letters, the order of each letter, and indicate whether it is a vowel or not.")
@@ -591,16 +598,15 @@ This function creates a JSON object to tell OpenAI how we want its response stru
            'description' : 'the value in each column'}
 }}}}}]"))
 
-
-                 (multiple-value-bind (arguments name)
-                     (gpt::ask-chat prompt-or-messages ,@key-args-signature)
-                   (when verbose (log-llm "ask-for-table: arguments=~a name=~a~%" arguments name))
-                   (handler-case
-                       (cond ((null name) (list arguments))
+                 (handler-case
+                     (multiple-value-bind (json-text function-name)
+                         (gpt::ask-chat prompt-or-messages ,@key-args-signature)
+                       (when verbose (log-llm "ask-for-table: json-text=~a function-name=~a~%" json-text function-name))
+                       (cond ((null function-name) (handle-llm-error json-text "ask-for-table" (list (list json-text))))
                              (t
                               (let* (
-                                     (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
+                                     (jso (read-json json-text)) ;;; json-text is JSON text inside a JSON object
                                      (response-list (jso-val jso "rows")))
                                 response-list
-                                )))
-                     (error (e) (log-llm "~a~%" e) nil)))))
+                                ))))
+                   (error (e) (handle-llm-error "ask-for-table" (princ-to-string e) (list (list (princ-to-string e))))))))

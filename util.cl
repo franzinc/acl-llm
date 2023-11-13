@@ -1,5 +1,5 @@
 (in-package :llm)
-
+(defvar *llm-description* "acl-llm package November 25, 2023")
 #|
 The macro log-llm allows acl-llm to compile with ACL and Agraph.
 |#
@@ -96,3 +96,27 @@ Finally we eval the expanded form to actually define the named function.
 ;; no can do.
 ;; need some kind of fwrapper to temporarily change what this does
 #+ignore (defmethod st-json::write-json-element ((element real) stream) (format stream "~,8f" element))
+
+
+
+#+acl-llm-build
+(defun handle-llm-error (caller message expression)
+    (log-llm "~a: ~a~%" caller message)
+    expression)
+#-acl-llm-build
+(defun llm::handle-llm-error (caller message expression)
+  (let ((%acl-llm-error "LLM API ERROR"))  
+    (declare (ignore expression))
+    (db.agraph.log:log-info :llm "LLM error: caller='~a': message='~a'" caller message)
+    (db.agraph.http.shared::bad-req
+     %acl-llm-error "~a: ~a" caller message))
+)
+
+;; comment in: src/agraph/lisp/http/shared/http.cl
+;; bad-req creates a condition displayed in Agraph as
+;; "SPARQL-ERROR-CLASS: DETAILED-ERROR-DESCRIPTION"
+;;
+;; Where SPARQL-ERROR-CLASS matches the summary string of one of the
+;; defcodes in src/agraph/lisp/http/shared/error.cl
+;; We need
+;; (defcode %acl-llm-error "LLM API ERROR")

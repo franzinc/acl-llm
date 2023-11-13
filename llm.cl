@@ -23,11 +23,13 @@ v0: Initial release of the :acl-llm module."
   (require :st-json))
 
 (defpackage :llm
+  (:documentation "llm package contains code that works with any LLM model (GPT, LLAMA2 etc.")
   (:use :cl :excl :st-json)
   (:export
    #:*default-vector-database-name*
    #:*default-vector-database-dir*
    #:args-list-macro
+   #:handle-llm-error
    #:key-args-fun
    #:key-args-list
    #:key-args-signature
@@ -51,6 +53,7 @@ v0: Initial release of the :acl-llm module."
    #:delete-jso-val
    #:read-lines-from-stream
    #:cosine-similarity
+   #:*serp-api-key*
    #:ask-serp
    #:set-serp-api-key
    #:call-serpapi
@@ -61,6 +64,7 @@ v0: Initial release of the :acl-llm module."
 
 (defpackage :llm.gpt
   (:shadowing-import-from :llm
+                          #:handle-llm-error                          
                           #:args-list-macro
                           #:key-args-fun
                           #:key-args-list
@@ -88,6 +92,7 @@ v0: Initial release of the :acl-llm module."
                 #:vector-database-embedding-vectors
                 #:vector-database-property-vectors
                 #:write-vector-database
+                #:*serp-api-key*                
                 #:ask-serp
                 #:set-serp-api-key
                 #:call-serpapi
@@ -147,6 +152,7 @@ v0: Initial release of the :acl-llm module."
   (:import-from :llm
                 #:*default-vector-database-name*
                 #:*default-vector-database-dir*
+                #:handle-llm-error                
                 #:args-list-macro
                 #:key-args-fun
                 #:key-args-list
@@ -165,6 +171,7 @@ v0: Initial release of the :acl-llm module."
                 #:vector-database-embedder
                 #:describe-vector-database
                 #:write-vector-database
+                #:*serp-api-key*                
                 #:ask-serp
                 #:set-serp-api-key
                 #:call-serpapi
