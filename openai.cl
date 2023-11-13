@@ -52,7 +52,7 @@
                           (verbose nil))
   "Generic interface to all openai v1 API functions using do-http-request."
   (let ((uri (format nil "https://api.openai.com/v1/~a" cmd)))
-    (when verbose (format t "content=~S~%" content))
+    (when verbose (log-llm "content=~S~%" content))
     (multiple-value-bind (body code headers page socket req)
         (net.aserve.client:do-http-request
           uri
@@ -64,18 +64,18 @@
           :method method)
       (declare (ignore req socket page))
       (when verbose
-        (format t "headers=~S~%" headers)
-        (format t "body=~S~%" body)
-        (format t "code=~a~%" code))
+        (log-llm "headers=~S~%" headers)
+        (log-llm "body=~S~%" body)
+        (log-llm "code=~a~%" code))
       (cond ((and (= code 429) (> retries 0)) ;;; HTTP 429 API rate limit exceeded, retry with exponential backoff
              (sleep delay)
              (call-openai cmd :method method :content content :timeout timeout :content-type content-type
                               :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
             (t
-;;;             (format t "body=~a~%" body)
+;;;             (log-llm "body=~a~%" body)
              (let ((jso (handler-case (read-json body)
                           (error (e)
-                            (format t "~a: Unable to read json: ~a~%" e body)
+                            (log-llm "~a: Unable to read json: ~a~%" e body)
                             (jso)))))
               jso))))))
 
@@ -173,7 +173,7 @@
                     (status (jso-val curr-status "status"))
                     (created-at (jso-val curr-status "created_at"))
                     (updated-at (jso-val curr-status "updated_at")))
-               (format t "id=~a~%status=~a~%created:~S~%updated:~S~%" id status
+               (log-llm "id=~a~%status=~a~%created:~S~%updated:~S~%" id status
                        (date-string created-at)
                        (date-string updated-at))
               (values id  curr-status))))))
@@ -187,7 +187,7 @@
     (loop for event in events do
       (let ((message (jso-val event "message"))
             (created-at (jso-val event "created_at")))
-        (format t "~a ~a~%" message (date-string created-at))))
+        (log-llm "~a ~a~%" message (date-string created-at))))
    events))
 
 (defun upload-openai-file (filename)
@@ -212,7 +212,7 @@ Authorization: API-KEY
 "
 #+ignore(let* ((filename "gpt3-data/mydata37.jsonl")
               (query `(("purpose" . "fine-tune") ("file" . ,(format nil "'@~a'" filename)))))
-    (format t "query=~S~%" query)
+    (log-llm "query=~S~%" query)
     (call-openai "files" :method :post :query query)
             )
 
@@ -221,7 +221,7 @@ Authorization: API-KEY
                   "curl https://api.openai.com/v1/files  -H \"Authorization: Bearer ~a\" -F purpose=\"fine-tune\" -F   file='@~a'"
                   *openai-api-key*
                   filename)))
-;;;    (format t "~a~%" cmd)
+;;;    (log-llm "~a~%" cmd)
     (multiple-value-bind (shell-stream error-stream process)
         (excl:run-shell-command cmd
                                 :output :stream :error-output nil :wait nil)
@@ -242,15 +242,15 @@ Authorization: API-KEY
 
 
 (defun extract-arguments (message)
-;;;  (format t "--- message=~s~%" message)
-;;;  (format t "--- function_call=~S~%" (jso-val message "function_call"))
-;;;  (format t "--- arguments=~S~%" (jso-val (jso-val message "function_call") "arguments"))
-;;;  (format t "content=~S~%" (jso-val message "content"))
+;;;  (log-llm "--- message=~s~%" message)
+;;;  (log-llm "--- function_call=~S~%" (jso-val message "function_call"))
+;;;  (log-llm "--- arguments=~S~%" (jso-val (jso-val message "function_call") "arguments"))
+;;;  (log-llm "content=~S~%" (jso-val message "content"))
   (let* ((function-call (or (jso-val message "function_call") (jso)))
          (name (jso-val function-call "name"))
          (arguments (or (jso-val function-call "arguments") "{}")))
-;;;    (format t "--- name=~S~%" name)
-;;;    (format t "--- arguments=~S~%" arguments)
+;;;    (log-llm "--- name=~S~%" name)
+;;;    (log-llm "--- arguments=~S~%" arguments)
     (values arguments name)))
 
 (eval-when (compile load eval) 
@@ -353,7 +353,7 @@ Authorization: API-KEY
                   (pushjso "messages" message-array jso)
                   ,@key-args-pushjso
 
-;;;    (format t "~S~%" jso)
+;;;    (log-llm "~S~%" jso)
                   (let* ((resp (call-openai "chat/completions" :timeout timeout :method :post :content (json-string jso) :verbose verbose))
                          (choices (when resp (jso-val resp "choices")))
                          (err (when resp (jso-val resp "error")))
@@ -384,7 +384,7 @@ Authorization: API-KEY
                  (setf model *openai-default-chat-model*)
                  (pushjso "prompt" prompt-or-messages jso)
                  ,@key-args-pushjso
-;;;    (format t "jso=~a~%" (json-string jso))
+;;;    (log-llm "jso=~a~%" (json-string jso))
                  (setf resp (call-openai "completions" :method :post :content (json-string jso)
                                                        :timeout timeout
                                                        :verbose verbose
@@ -392,7 +392,7 @@ Authorization: API-KEY
                  (setf choices (jso-val resp "choices"))
                  (setf responses (or (mapcar
                                       (lambda (u) (string-trim (format nil " ~%") (jso-val u "text"))) choices) '("No text")))
-                 (when verbose (format t "jso=~S~%" resp))
+                 (when verbose (log-llm "jso=~S~%" resp))
                  (cond ((equal output-format :text) (car responses))
                        (t responses))))
 
@@ -429,7 +429,7 @@ Authorization: API-KEY
                                     (jso (read-json arguments)) ;;; arguments is JSON text inside a JSON object
                                     (response-list (jso-val jso "array")))
                                response-list)))
-                    (error (e) (format t "~a~%" e) nil)))))
+                    (error (e) (log-llm "~a~%" e) nil)))))
 
 
 (key-args-fun ask-for-map "" 
@@ -464,7 +464,7 @@ Authorization: API-KEY
 
                  (multiple-value-bind (arguments name)
                      (gpt::ask-chat prompt-or-messages ,@key-args-signature)
-                   (when verbose (format t "ask-for-map: arguments=~a name=~a~%" arguments name))
+                   (when verbose (log-llm "ask-for-map: arguments=~a name=~a~%" arguments name))
                    (handler-case
                        (cond ((null name) (list arguments))
                              (t
@@ -474,7 +474,7 @@ Authorization: API-KEY
                                 (mapcar (lambda (u) (list (jso-val u "key") (jso-val u "value") )) response-list)
                                 ;;;response-list
                                 )))
-                     (error (e) (format t "~a~%" e) nil)))))
+                     (error (e) (log-llm "~a~%" e) nil)))))
 
 
 
@@ -509,14 +509,14 @@ This function creates a JSON object to tell OpenAI how we want its response stru
               It's broken out as a separate function in case we want to customize it in the initfile.
 "
           `(progn
-                (when verbose (format t "ask-my-documents dir=~a~%" llm::*default-vector-database-dir*))
+                (when verbose (log-llm "ask-my-documents dir=~a~%" llm::*default-vector-database-dir*))
                 (let* ((query prompt-or-messages)
-                       (side-effect (when verbose (format t "database-name=~S dir=~S=~%" vector-database-name llm::*default-vector-database-dir*)))
+                       (side-effect (when verbose (log-llm "database-name=~S dir=~S=~%" vector-database-name llm::*default-vector-database-dir*)))
                        (vector-database (llm::read-vector-database vector-database-name :dir llm::*default-vector-database-dir* ))
                        (side-effect (setf (llm::vector-database-embedder vector-database) 'gpt::embed))
                        
                        (matches (nn vector-database query :top-n top-n :min-score min-score))
-                       (side-effect (when verbose (format t "database=~S matches=~S top-n=~a min-score=~a~%" vector-database matches top-n min-score)))
+                       (side-effect (when verbose (log-llm "database=~S matches=~S top-n=~a min-score=~a~%" vector-database matches top-n min-score)))
                        (score-table (make-hash-table :test 'string=))
                        (original-text-table (make-hash-table :test 'string=))
                        (id-content (mapcar (lambda (u)
@@ -562,7 +562,7 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                              (citation-ids (jso-val json-response "citation_ids")))
                         (mapcar (lambda (u) (list text-response (gethash u score-table) u (gethash u original-text-table)))
                                 citation-ids))
-                    (error (e) (format t "~a~%" e) nil)))))
+                    (error (e) (log-llm "~a~%" e) nil)))))
 
 
 
@@ -594,7 +594,7 @@ This function creates a JSON object to tell OpenAI how we want its response stru
 
                  (multiple-value-bind (arguments name)
                      (gpt::ask-chat prompt-or-messages ,@key-args-signature)
-                   (when verbose (format t "ask-for-table: arguments=~a name=~a~%" arguments name))
+                   (when verbose (log-llm "ask-for-table: arguments=~a name=~a~%" arguments name))
                    (handler-case
                        (cond ((null name) (list arguments))
                              (t
@@ -603,4 +603,4 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                                      (response-list (jso-val jso "rows")))
                                 response-list
                                 )))
-                     (error (e) (format t "~a~%" e) nil)))))
+                     (error (e) (log-llm "~a~%" e) nil)))))

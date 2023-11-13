@@ -1,12 +1,9 @@
 ;; See the file "LICENSE" for the full license governing this code.
 
 
-#|
-;; not needed when found in agraph source
-#+(or (version= 10 1) (version= 11 0 beta))
+#+(and acl-llm-build (version= 10 1))
 (sys:defpatch "acl-llm" 5
-"
-v5: ask-for-table added/LLAMA2 API refinement
+"v5: ask-for-table added/LLAMA2 API refinement/ask-serp SERP API interface
 v4: fixed off-by-one error in shortq
 v3: code to work with LLM embeddings
 v2: fix interaction between :output-format and :function in ask-chat;
@@ -14,7 +11,12 @@ v1: Function-calling API;
 v0: Initial release of the :acl-llm module."
   :type :system
   :post-loadable t)
-|#
+
+#+(and acl-llm-build (version= 11 0))
+(sys:defpatch "acl-llm" 0
+  "v0: Initial release of the :acl-llm module."
+  :type :system
+  :post-loadable t)
 
 (eval-when (compile load eval)
   (require :aserve)
@@ -29,7 +31,7 @@ v0: Initial release of the :acl-llm module."
    #:key-args-fun
    #:key-args-list
    #:key-args-signature
-   #:key-args-pushjso   
+   #:key-args-pushjso
    #:mag
    #:nn
    #:read-vector-database
@@ -46,8 +48,14 @@ v0: Initial release of the :acl-llm module."
    #:jso-val
    #:json-string
    #:pushjso
+   #:delete-jso-val
    #:read-lines-from-stream
    #:cosine-similarity
+   #:ask-serp
+   #:set-serp-api-key
+   #:call-serpapi
+   #:traverse-serp-jso
+   #:log-llm
    ))
 
 
@@ -57,11 +65,13 @@ v0: Initial release of the :acl-llm module."
                           #:key-args-fun
                           #:key-args-list
                           #:key-args-signature
-                          #:key-args-pushjso                          
+                          #:key-args-pushjso
                           #:read-lines-from-stream
                           #:pushjso
+                          #:delete-jso-val
                           #:jso-val
-                          #:json-string)
+                          #:json-string
+                          )
   (:use :cl :excl)
   (:import-from :st-json #:jso #:read-json)
   (:import-from :llm
@@ -78,6 +88,11 @@ v0: Initial release of the :acl-llm module."
                 #:vector-database-embedding-vectors
                 #:vector-database-property-vectors
                 #:write-vector-database
+                #:ask-serp
+                #:set-serp-api-key
+                #:call-serpapi
+                #:traverse-serp-jso
+                #:log-llm                
                 )
   (:nicknames :gpt)
   (:export
@@ -103,7 +118,7 @@ v0: Initial release of the :acl-llm module."
    #:ask-chat
    #:ask-embed
    #:ask-for-list
-   #:ask-for-table   
+   #:ask-for-table
    #:call-oopenai
    #:cancel-fine-tune
    #:chat
@@ -123,6 +138,7 @@ v0: Initial release of the :acl-llm module."
   (:shadowing-import-from :llm
                           #:read-lines-from-stream
                           #:pushjso
+                          #:delete-jso-val
                           #:jso-val
                           #:json-string)
 
@@ -135,7 +151,7 @@ v0: Initial release of the :acl-llm module."
                 #:key-args-fun
                 #:key-args-list
                 #:key-args-signature
-                #:key-args-pushjso                
+                #:key-args-pushjso
                 #:mag
                 #:nn
                 #:read-vector-database
@@ -149,6 +165,11 @@ v0: Initial release of the :acl-llm module."
                 #:vector-database-embedder
                 #:describe-vector-database
                 #:write-vector-database
+                #:ask-serp
+                #:set-serp-api-key
+                #:call-serpapi
+                #:traverse-serp-jso
+                #:log-llm                
                 )
   (:nicknames :llama2 :llama.cpp)
   (:export

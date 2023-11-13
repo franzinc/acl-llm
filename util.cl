@@ -1,9 +1,15 @@
 (in-package :llm)
 
+#|
+The macro log-llm allows acl-llm to compile with ACL and Agraph.
+|#
 
+(defmacro log-llm (log-llm-control-string &rest log-llm-args)
+  #-acl-llm-build`(db.agraph.log:log-info :llm ,log-llm-control-string ,@log-llm-args)
+  #+acl-llm-build`(format t ,log-llm-control-string ,@log-llm-args))
 
 #|
-This was kind of fun to figure out.
+This next section was kind of fun to figure out.
 
 The problem was to define a macro so that we could define functions
 involving 3 macro substitutions
@@ -11,7 +17,7 @@ involving 3 macro substitutions
 2. In the body of the function, replace @,key-args-signature with the calling signature as a list of :key val
 3. In the body of the function, replace @,key-args-pushjso with the code to push the key-values onto the JSON object.
 A simple evocation might be
-  (key-args-fun 'ask-bot "Ask the bot a question" 
+  (key-args-fun 'ask-bot "Ask the bot a question"
      `(ask-llama2-completions prompt-or-messages ,@key-args-signature))
 The function name is ask-bot and the body contains an instance of  ,@key-args-signature.
 The macro should expand to
@@ -33,7 +39,7 @@ Finally we eval the expanded form to actually define the named function.
 (defvar key-args-list nil)
 (defvar key-args-signature nil)
 (defvar key-args-pushjso nil)
-                          
+
 
 (defmacro args-list-macro (name body)
   ;; body must be a single s-expression
@@ -62,9 +68,16 @@ Finally we eval the expanded form to actually define the named function.
          (val (cdr (assoc key alist :test 'string=))))
     val))
 
+(defun delete-jso-val (key jso)
+  (let ((found (assoc key (st-json::jso-alist  jso) :test 'string=)))
+;;;    (log-llm "found=~a~%" found)
+    (when found (setf (cdr found) nil))
+    jso))
+
+
 (defun pushjso (key value jso)
   "Push a kev value pair into a json object"
-  (let ((found (assoc key (st-json::jso-alist  jso) :test 'string=)))
+  (let ((found (assoc key (st-json::jso-alist jso) :test 'string=)))
     (cond (found
            (setf (cdr found)
                  (cond ((consp (cdr found))
@@ -75,7 +88,7 @@ Finally we eval the expanded form to actually define the named function.
 
 (defun json-string (jso)
   "Turn a json object into a string."
-;;;  (format t "json-string ~S~%" (type-of jso))
+;;;  (log-llm "json-string ~S~%" (type-of jso))
   (let ((s (make-string-output-stream)))
     (write-json jso s)
     (get-output-stream-string s)))
@@ -83,5 +96,3 @@ Finally we eval the expanded form to actually define the named function.
 ;; no can do.
 ;; need some kind of fwrapper to temporarily change what this does
 #+ignore (defmethod st-json::write-json-element ((element real) stream) (format stream "~,8f" element))
-
-

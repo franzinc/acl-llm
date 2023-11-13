@@ -43,7 +43,7 @@
                      *llama-cpp-python-api-host*
                      *llama-cpp-python-api-port*
                      cmd)))
-    (when verbose (format t "content=~S~%" content))
+    (when verbose (log-llm "content=~S~%" content))
     (multiple-value-bind (body code headers page socket req)
         (net.aserve.client:do-http-request
           uri
@@ -55,13 +55,13 @@
           :method method)
       (declare (ignore req socket page))
       (when verbose
-        (format t "headers=~S~%" headers)
-        (format t "body=~a~%" (length body))
-        (format t "body=~S~%" body)
-        (format t "code=~a~%" code))
+        (log-llm "headers=~S~%" headers)
+        (log-llm "body=~a~%" (length body))
+        (log-llm "body=~S~%" body)
+        (log-llm "code=~a~%" code))
       (let ((jso (handler-case (read-json body)
                    (error (e)
-                     (format t "~a: Unable to read json: ~a~%" e body)
+                     (log-llm "~a: Unable to read json: ~a~%" e body)
                      (jso)))))
         jso))))
 
@@ -169,7 +169,7 @@
                            (push  message-jso message-array)))
                  (pushjso "messages" message-array jso)
                  ,@key-args-pushjso
-;;;    (format t "~a~%" (json-string jso))
+;;;    (log-llm "~a~%" (json-string jso))
                  (call-llama.cpp_Python_API "chat/completions" :method :post :verbose verbose
                                                                :timeout timeout
                                                                :content (json-string jso))))
@@ -183,7 +183,7 @@
                              (let* ((choices (jso-val jso "choices"))
                                     (error-val (jso-val jso "error"))
                                     (choice (car choices)))
-                               (when verbose (format t "choices=~S~%error=~S~%" choices error-val))
+                               (when verbose (log-llm "choices=~S~%error=~S~%" choices error-val))
                                (cond (error-val (jso-val error-val "message"))
                                      (choice
                                       (jso-val choice "text"))))))
@@ -198,7 +198,7 @@
                             (let* ((choices (jso-val jso "choices"))
                                    (error-val (jso-val jso "error"))
                                    (choice (car choices)))
-                              (when verbose (format t "choices=~S~%error=~S~%" choices error-val))
+                              (when verbose (log-llm "choices=~S~%error=~S~%" choices error-val))
                               (cond (error-val (jso-val error-val "message"))
                                     (choice
                                      (let ((message (jso-val choice "message")))
@@ -212,7 +212,7 @@
                       (prompt (format nil "\\n\\n### Instructions:\\n~a\\n\\n### Response:\\n" prompt-or-messages)))
                  
                  stream ;; to avoid unused var error
-                 ;;;    (format t "~a~%" prompt)
+                 ;;;    (log-llm "~a~%" prompt)
                  (pushjso "prompt" prompt jso)
                  ,@key-args-pushjso
                  (call-llama.cpp_Python_API "completions" :method :post
@@ -302,7 +302,7 @@
                       nil)))
 
 (key-args-fun embed "" 
-                `(progn (when verbose (format t "Embed '~a'.~%" prompt-or-messages))
+                `(progn (when verbose (log-llm "Embed '~a'.~%" prompt-or-messages))
                         (let ((embedding (llama2::ask-llama2-embeddings prompt-or-messages ,@key-args-signature)))
                           (cond (embedding
                                  (cond (normalize (let ((mag (mag embedding)))
@@ -326,19 +326,19 @@
          (elements (ask-for-list (format nil "List 100 ~a." type-plural))))
     (declare (ignore side-effect))
     (setf elements (remove-if (lambda (u) (null (stringp u))) elements))
-    (format t "~a elements~%" (length elements))
+    (log-llm "~a elements~%" (length elements))
     (setf elements (remove-duplicates elements :test 'string-equal))
-    (format t "~a elements without duplicates~%" (length elements))
+    (log-llm "~a elements without duplicates~%" (length elements))
     (setf elements (set-difference elements visited :test 'string=))
-    (format t "~a elements without already visited~%" (length elements))
-    (format t "~a total ~a~%" (+ (length elements) (length visited)) type-plural)
+    (log-llm "~a elements without already visited~%" (length elements))
+    (log-llm "~a total ~a~%" (+ (length elements) (length visited)) type-plural)
 ;;;    (setf (vector-database-embedder vector-database) #'llama2::embed)
-    (format t "~a:~%" type-plural)
+    (log-llm "~a:~%" type-plural)
     (dolist (elt elements)
       (let* ((vec (embed elt))
              (id (gentemp "id-"))
              (properties (list id elt type-name)))
-        (format t "~a~%" elt)
+        (log-llm "~a~%" elt)
         (push properties (vector-database-property-vectors vector-database))
         (push vec (vector-database-embedding-vectors vector-database))))
     (write-vector-database vector-database)

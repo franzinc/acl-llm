@@ -24,7 +24,7 @@
   (let ((name (vector-database-name vector-database))
         (size (length (vector-database-embedding-vectors vector-database)))
         (dim (length (car (vector-database-embedding-vectors vector-database)))))
-    (format t "~a ~a dimensions ~a vectors~%" name dim size)
+    (log-llm "~a ~a dimensions ~a vectors~%" name dim size)
     (values dim size name)))
 
 (defun validate-vector-database (vector-database) ;; validate vector database
@@ -37,7 +37,7 @@
         (let* ((vec (nth n vectors))
                (delta (abs (- (mag vec) 1.0))))
           (when (> delta 0.001)
-            (format t "~a ~a~%" n (mag vec))))
+            (log-llm "~a ~a~%" n (mag vec))))
         (error (e) (error "index ~a has error ~a~%" n e)))))))
 
 (defun find-in-vector-database (vector-database text) ;;
@@ -45,7 +45,7 @@
   (loop for items in (vector-database-property-vectors vector-database) do
     (destructuring-bind (id original-text . properties) items
       (declare (ignore properties))
-      (when (string= text original-text) (format t "~a~%" id)))))
+      (when (string= text original-text) (log-llm "~a~%" id)))))
 
 (defun trim-vector-database (vector-database n) ;;
   "keep only the first n elements of a database"
@@ -77,7 +77,7 @@
          (properties-checkpoint-filename (format nil "~a.checkpoint" properties-filename))
          (properties `(("dim" . ,dim) ("name" . ,name))))
     (setf (vector-database-properties vector-database) properties)
-    ;;(format t "writing ~S~%" properties)
+    ;;(log-llm "writing ~S~%" properties)
     (with-open-file (out vectors-checkpoint-filename :direction :output :if-exists :supersede)
       (dolist (item (vector-database-embedding-vectors vector-database))
         (write-all-elements item out)
@@ -144,7 +144,7 @@
             (assert (= (length vec) (length embed)))
             (destructuring-bind (id original-text . properties) item
               (let ((score (funcall similarity embed vec)))
-;;;                (assert (<= score  1.0) (score label) (format t "score=~a text=~a~%" score text))
+;;;                (assert (<= score  1.0) (score label) (log-llm "score=~a text=~a~%" score text))
                 (insert-shortq-if shortq `(,id ,score ,original-text ,@properties)))))
     (shortq-item-pq shortq)))
 

@@ -27,7 +27,7 @@
 
 (defun print-shortq (shortq)
   "Min score [smallest - largest] size: (list of 'caddr)"
-    (format t "~a [~a - ~a] ~a:~S~%"
+    (log-llm "~a [~a - ~a] ~a:~S~%"
             (shortq-min-score shortq)
             (threshold-shortq-value shortq)
             (largest-shortq-value shortq)

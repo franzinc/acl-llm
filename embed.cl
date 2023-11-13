@@ -20,8 +20,7 @@
                         (call-openai "embeddings" :method :post :timeout timeout :verbose verbose
                                                   :content (json-string jso))))
                   (when log-progress
-                    #-acl-llm-build(db.agraph.log:log-info :llm "Embed ~a ~a~%" prompt-or-messages (- (get-internal-real-time) start-time))
-                    #+acl-llm-build(format t "Embed ~a ~a~%" prompt-or-messages (- (get-internal-real-time) start-time))
+                    (log-llm "Embed ~a ~a~%" prompt-or-messages (- (get-internal-real-time) start-time))
                     )
                   response)))
 
@@ -47,12 +46,12 @@
            (type-plural (ask-chat (format nil "pluralize ~a" type-name)))
            (elements (ask-for-list (format nil "List 100 members of the set of all ~a" type-plural))))
       (setf elements (remove-duplicates elements :test 'string-equal))
-      (format t "~a:~%" type-plural)
+      (log-llm "~a:~%" type-plural)
       (dolist (elt elements)
         (let* ((vec (embed elt))
                (id (gentemp "id-"))
                (properties (list id elt type-name)))
-          (format t "~a~%" elt)
+          (log-llm "~a~%" elt)
           (push properties (vector-database-property-vectors vector-database))
           (push vec (vector-database-embedding-vectors vector-database))))
       (write-vector-database vector-database)

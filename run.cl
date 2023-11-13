@@ -7,4 +7,5 @@
 (in-package :gpt)
 (setf *default-vector-database-dir* (sys:getenv "ACL_LLM_DEFAULT_VECTOR_DATABASE_DIR"))
 (set-openai-api-key (sys:getenv "ACL_LLM_OPENAI_API_KEY"))
+(set-serp-api-key (sys:getenv "ACL_LLM_SERP_API_KEY"))
 
