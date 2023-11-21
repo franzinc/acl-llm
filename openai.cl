@@ -485,7 +485,7 @@ Authorization: API-KEY
 ~{~a~%~}.
 Respond to the query '~a' as though you wrote the content.  Be brief.  You only have 20 seconds to reply.
 Place your response to the query in the 'response' field.
-Insert the list of citations whose content informed the repsonse into the 'citation_ids' array.
+Insert the list of citations whose content informed the response into the 'citation_ids' array.
 " query formatted-content query)))
   (setf prompt (remove-if (lambda (ch) (> (char-code ch) 127)) prompt))
   prompt))
