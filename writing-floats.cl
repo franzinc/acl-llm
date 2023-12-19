@@ -1,8 +1,7 @@
 (in-package :llm)
 
 
-(deftype single-float-array ()
-  '(simple-array single-float (*)))
+
 
 
 (defun dotproduct (bm1 bm2)

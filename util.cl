@@ -1,4 +1,5 @@
 (in-package :llm)
+
 (defvar *llm-description* "acl-llm package November 25, 2023")
 #|
 The macro log-llm allows acl-llm to compile with ACL and Agraph.
@@ -99,6 +100,7 @@ Finally we eval the expanded form to actually define the named function.
 
 
 
+
 #+acl-llm-build
 (defun handle-llm-error (caller message expression)
     (log-llm "~a: ~a~%" caller message)
@@ -120,3 +122,6 @@ Finally we eval the expanded form to actually define the named function.
 ;; defcodes in src/agraph/lisp/http/shared/error.cl
 ;; We need
 ;; (defcode %acl-llm-error "LLM API ERROR")
+
+(deftype single-float-array ()
+  '(simple-array single-float (*)))

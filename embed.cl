@@ -37,6 +37,7 @@
                    (values embedding error-message))))
 
 
+;; acl version only:
 #|
 (defun sample-vector-database ()
   (declare (special *default-vector-database-name*))

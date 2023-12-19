@@ -26,8 +26,8 @@ v0: Initial release of the :acl-llm module."
   (:documentation "llm package contains code that works with any LLM model (GPT, LLAMA2 etc.")
   (:use :cl :excl :st-json)
   (:export
-   #:*default-vector-database-name*
-   #:*default-vector-database-dir*
+   #+acl-llm-build #:*default-vector-database-name*
+   #+acl-llm-build #:*default-vector-database-dir*
    #:args-list-macro
    #:handle-llm-error
    #:key-args-fun
@@ -76,11 +76,11 @@ v0: Initial release of the :acl-llm module."
                           #:jso-val
                           #:json-string
                           )
-  (:use :cl :excl)
+  (:use :cl :excl #-acl-llm-build :db.agraph)
   (:import-from :st-json #:jso #:read-json)
   (:import-from :llm
-                #:*default-vector-database-name*
-                #:*default-vector-database-dir*
+                #+acl-llm-build #:*default-vector-database-name*
+                #+acl-llm-build #:*default-vector-database-dir*
                 #:mag
                 #:nn
                 #:read-vector-database
@@ -102,8 +102,8 @@ v0: Initial release of the :acl-llm module."
   (:nicknames :gpt)
   (:export
 ;;; export all the symbols imported from nn
-   #:*default-vector-database-name*
-   #:*default-vector-database-dir*
+   #+acl-llm-build #:*default-vector-database-name*
+   #+acl-llm-build #:*default-vector-database-dir*
    #:mag
    #:nn
    #:read-vector-database
@@ -150,8 +150,8 @@ v0: Initial release of the :acl-llm module."
   (:use :cl :excl)
   (:import-from :st-json #:jso #:read-json)
   (:import-from :llm
-                #:*default-vector-database-name*
-                #:*default-vector-database-dir*
+                #+acl-llm-build #:*default-vector-database-name*
+                #+acl-llm-build #:*default-vector-database-dir*
                 #:handle-llm-error                
                 #:args-list-macro
                 #:key-args-fun
@@ -181,8 +181,8 @@ v0: Initial release of the :acl-llm module."
   (:nicknames :llama2 :llama.cpp)
   (:export
 ;;; export all the symbols imported from nn
-   #:*default-vector-database-name*
-   #:*default-vector-database-dir*
+   #+acl-llm-build #:*default-vector-database-name*
+   #+acl-llm-build #:*default-vector-database-dir*
    #:mag
    #:nn
    #:read-vector-database

@@ -72,7 +72,9 @@
 ;;; 429 API rate limit exceeded, retry with exponential backoff
 ;;; 503 - The engine is currently overloaded, please try again later
 ;;; 401 - various errors, JSON contains [error][message] path.         
-          (cond ((and (member code '(429 503)) (> retries 0)) 
+;;; 500 - I've seen this happen so we'll try again after this
+          (cond ((and (member code '(429 503 500)) (> retries 0)) 
+                 (log-llm "Error code returned from openAi: ~s, ~d retries left~%" code retries)
                  (sleep delay)
                  (call-openai cmd :method method :content content :timeout timeout :content-type content-type
                                   :extra-headers extra-headers :query query :retries (1- retries) :delay (* 2 delay) :verbose verbose))
@@ -279,8 +281,8 @@ Authorization: API-KEY
       (verbose nil)
       (top-n *openai-default-top-n*)
       (min-score *openai-default-min-score*)
-      (vector-database-name llm::*default-vector-database-name*))
-
+      (vector-database-name #+acl-llm-build llm::*default-vector-database-name*))
+      
     key-args-signature
     '(
       :best-of best-of
@@ -302,9 +304,6 @@ Authorization: API-KEY
       :top-p top-p
       :user user
       :verbose verbose
-      :vector-database-name vector-database-name
-      :top-n top-n
-      :min-score min-score
       :vector-database-name vector-database-name
       :top-n top-n
       :min-score min-score
@@ -494,6 +493,7 @@ Insert the list of citations whose content informed the response into the 'citat
 
 
 
+#+acl-llm-build
 (key-args-fun ask-my-documents
 
               "The purpose of this function is to search a local knowledge base of documents for content that matches the query,
@@ -571,6 +571,132 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                  (error (e) (handle-llm-error "ask-my-documents"
                                               (princ-to-string e)
                                               (list (list (princ-to-string e) 0.0 "error" "error"))))))
+
+#-acl-llm-build
+(key-args-fun ask-my-documents
+
+              "The purpose of this function is to search a local knowledge base of documents for content that matches the query,
+then formulate a big prompt that combines this 'background info' with the original query, and return a response along with citations to the documents that
+              contributed to the query (but not necessarily all the documents that matched).
+
+ask-my-documents implements the concept known as Retrieval Augmented Generation (RAG).
+
+This function creates a JSON object to tell OpenAI how we want its response structured.  Confusingly this feature is called 'function-calling' in the OpenAI documentation.  Basically it allows us to tell OpenAI that we want a JSON object of the form
+
+{'response': 'the response to the query',
+ 'citation_ids':[uri, uri1, ...]
+}
+              The function format-ask-my-documents-prompt formats the 'big prompt' from the matching documents plus the original query.
+              It's broken out as a separate function in case we want to customize it in the initfile.
+"
+              `(handler-case
+                   (progn
+                 
+                     (let* ((query prompt-or-messages)
+                            (matches)
+                            (score-table (make-hash-table :test 'string=))
+                            (original-text-table (make-hash-table :test 'string=))
+                            (id-content)
+                            (prompt)
+                            (db)
+                            (*db*))
+                   
+                       ;; unused vars we can't declare unused due to how this form is generated
+                       output-format
+                   
+                       
+                       (setq db (db.agraph:open-triple-store vector-database-name))
+
+                       
+                       (unwind-protect
+                           (progn
+                           
+                             ;; the next step (ask-chat) will only work for openai at the moment
+                             ;; so make sure the vdb is setup for openai and get
+                             ;; the api key
+                           
+                           
+                             (setq matches (db.agraph:vector-store-nearest-neighbor query  
+                                                                                    :db db 
+                                                                                    :min-score min-score 
+                                                                                    :top-n top-n))
+                           
+
+                             
+                             (setq id-content (mapcar #'(lambda (u)
+                                                          (destructuring-bind (id score text pred type) u
+                                                            (declare (ignore type pred))
+                                                            (setf (gethash id score-table) score)
+                                                            (setf (gethash id original-text-table) text)
+                                                            (list id text)))
+                                                      matches))
+                           
+                             (setq prompt (format-ask-my-documents-prompt query id-content))
+                           
+                           
+                             (setf function-call (read-json "{'name':'response_citations'}"))
+                             (setf functions (read-json "[
+{'name':'response_citations',
+'description':'function to provide a response and a list of IDs of any content contributing to the reponse.',
+'parameters':
+  {'type':'object',
+   'properties':
+   {
+    'response': {
+            'type': 'string',
+            'description': 'The response to the query.'
+          },
+
+    'citation_ids':
+      {
+       'type':
+       'array',
+       'description':'the IDs of the content contributing to the response',
+       'items':
+        {
+          'type': 'string',
+          'description': 'an ID of content that contributed to the response'
+}}}}}]"))
+                           
+                             (handler-case
+                                 (let* ((json-string-response
+                                         (gpt::ask-chat prompt ,@key-args-signature))
+                                        (json-response (read-json json-string-response))
+                                        (text-response (jso-val json-response "response"))
+                                        (citation-ids (jso-val json-response "citation_ids")))
+                                   
+                                   #+ignore 
+                                   (with-open-file (p "/usr/tmp/debugit" 
+                                                    :direction :output
+                                                    :if-exists :supersede)
+                                     (format p "prompt: ~%~a~3%" prompt)
+                                     (format p "json-response:~%~a~3%" json-response)
+                                     (format p "text-response:~%~a~3%" text-response)
+                                     (format p "citation-ids:~%~a~3%" citation-ids)
+                                     )
+                                   
+                                   (mapcar #'(lambda (oid) 
+                                               ;; openai strips the <>'s from the citations 
+                                               (let ((u (format nil "<~a>" oid)))
+                                                 (list text-response 
+                                                       (gethash u score-table) 
+                                                       (vector-store-object-property-value oid "id" :db db)
+                                                       (gethash u original-text-table))))
+                                           citation-ids))
+                               (error (e) (handle-llm-error "ask-my-documents"
+                                                            (princ-to-string e)
+                                                            (list (list (princ-to-string e) 0.0 "error" "error"))))))
+                       
+                         ;; cleanup
+                         (db.agraph:close-triple-store :db db)
+                       
+                         )))
+                 
+                 ;; handler-case:
+                 (error (e) (handle-llm-error "ask-my-documents"
+                                              (princ-to-string e)
+                                              (list (list (princ-to-string e) 0.0 "error" "error"))))))
+
 
 
 ;;;(ask-for-table "Create a table of letters, the order of each letter, and indicate whether it is a vowel or not.")

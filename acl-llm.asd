@@ -11,11 +11,12 @@
     (
      (:file "llm")
      (:file "util")
-     (:file "vector-database")
-     (:file "writing-floats")
+     ;;(:file "vector-database")
+     ;;(:file "writing-floats")
      (:file "embed" :depends-on ("util"))
-     (:file "shortq")
-     (:file "llama-cpp" :depends-on ("util"))
+     ;;(:file "shortq")
+     ;;(:file "llama-cpp" :depends-on ("util"))
      (:file "openai" :depends-on ("util"))
-     (:file "serp" :depends-on ("util"))))
+     (:file "serp" :depends-on ("util"))
+     ))
 
