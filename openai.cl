@@ -71,9 +71,9 @@
 ;;; See https://platform.openai.com/docs/guides/error-codes/api-errors
 ;;; 429 API rate limit exceeded, retry with exponential backoff
 ;;; 503 - The engine is currently overloaded, please try again later
-;;; 401 - various errors, JSON contains [error][message] path.         
+;;; 401 - various errors, JSON contains [error][message] path.
 ;;; 500 - I've seen this happen so we'll try again after this
-          (cond ((and (member code '(429 503 500)) (> retries 0)) 
+          (cond ((and (member code '(429 503 500)) (> retries 0))
                  (log-llm "Error code returned from openAi: ~s, ~d retries left~%" code retries)
                  (sleep delay)
                  (call-openai cmd :method method :content content :timeout timeout :content-type content-type
@@ -282,7 +282,7 @@ Authorization: API-KEY
       (top-n *openai-default-top-n*)
       (min-score *openai-default-min-score*)
       (vector-database-name #+acl-llm-build llm::*default-vector-database-name*))
-      
+
     key-args-signature
     '(
       :best-of best-of
@@ -424,7 +424,7 @@ Authorization: API-KEY
          {'type':'string'}
 }}}}]"))
                  (setf function-call (read-json "{'name':'array_of_strings'}"))
-                 (handler-case                 
+                 (handler-case
                      (multiple-value-bind (json-text function-name)
                          (ask-chat prompt-or-messages ,@key-args-signature)
                        (cond ((null function-name) (handle-llm-error "ask-for-list" json-text (list json-text))) ;;; this should not happen
@@ -464,7 +464,7 @@ Authorization: API-KEY
           }
         }
 }}}}}]"))
-                 (handler-case                 
+                 (handler-case
                      (multiple-value-bind (json-text function-name)
                          (gpt::ask-chat prompt-or-messages ,@key-args-signature)
                        (when verbose (log-llm "ask-for-map: json-text=~a name=~a~%" json-text function-name))
@@ -591,7 +591,7 @@ This function creates a JSON object to tell OpenAI how we want its response stru
 "
               `(handler-case
                    (progn
-                 
+
                      (let* ((query prompt-or-messages)
                             (matches)
                             (score-table (make-hash-table :test 'string=))
@@ -600,29 +600,29 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                             (prompt)
                             (db)
                             (*db*))
-                   
+
                        ;; unused vars we can't declare unused due to how this form is generated
                        output-format
-                   
-                       
+
+
                        (setq db (db.agraph:open-triple-store vector-database-name))
 
-                       
+
                        (unwind-protect
                            (progn
-                           
+
                              ;; the next step (ask-chat) will only work for openai at the moment
                              ;; so make sure the vdb is setup for openai and get
                              ;; the api key
-                           
-                           
-                             (setq matches (db.agraph:vector-store-nearest-neighbor query  
-                                                                                    :db db 
-                                                                                    :min-score min-score 
-                                                                                    :top-n top-n))
-                           
 
-                             
+
+                             (setq matches (db.agraph:vector-store-nearest-neighbor query
+                                                                                    :db db
+                                                                                    :min-score min-score
+                                                                                    :top-n top-n))
+
+
+
                              (setq id-content (mapcar #'(lambda (u)
                                                           (destructuring-bind (id score text pred type) u
                                                             (declare (ignore type pred))
@@ -630,10 +630,10 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                                                             (setf (gethash id original-text-table) text)
                                                             (list id text)))
                                                       matches))
-                           
+
                              (setq prompt (format-ask-my-documents-prompt query id-content))
-                           
-                           
+
+
                              (setf function-call (read-json "{'name':'response_citations'}"))
                              (setf functions (read-json "[
 {'name':'response_citations',
@@ -657,16 +657,16 @@ This function creates a JSON object to tell OpenAI how we want its response stru
           'type': 'string',
           'description': 'an ID of content that contributed to the response'
 }}}}}]"))
-                           
+
                              (handler-case
                                  (let* ((json-string-response
                                          (gpt::ask-chat prompt ,@key-args-signature))
                                         (json-response (read-json json-string-response))
                                         (text-response (jso-val json-response "response"))
                                         (citation-ids (jso-val json-response "citation_ids")))
-                                   
-                                   #+ignore 
-                                   (with-open-file (p "/usr/tmp/debugit" 
+
+
+                                   #+ignore(with-open-file (p "/usr/tmp/debugit"
                                                     :direction :output
                                                     :if-exists :supersede)
                                      (format p "prompt: ~%~a~3%" prompt)
@@ -674,24 +674,25 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                                      (format p "text-response:~%~a~3%" text-response)
                                      (format p "citation-ids:~%~a~3%" citation-ids)
                                      )
-                                   
-                                   (mapcar #'(lambda (oid) 
-                                               ;; openai strips the <>'s from the citations 
-                                               (let ((u (format nil "<~a>" oid)))
-                                                 (list text-response 
-                                                       (gethash u score-table) 
+                                   (remove-if (lambda (row) (< (cadr row) min-score))
+                                     (mapcar #'(lambda (oid)
+                                               ;; GPT sometimes strips the <>'s from the citations
+                                               (let ((u (cond ((null (search "<" oid)) (format nil "<~a>" oid)) (t oid))))
+                                                 (list text-response
+                                                       ;; sometimes GPT returns junk in citation-ids
+                                                       (or (gethash u score-table) 0.0) ;; set score to 0 for invalid citation-id
                                                        (vector-store-object-property-value oid "id" :db db)
                                                        (gethash u original-text-table))))
-                                           citation-ids))
+                                           citation-ids)))
                                (error (e) (handle-llm-error "ask-my-documents"
                                                             (princ-to-string e)
                                                             (list (list (princ-to-string e) 0.0 "error" "error"))))))
-                       
+
                          ;; cleanup
                          (db.agraph:close-triple-store :db db)
-                       
+
                          )))
-                 
+
                  ;; handler-case:
                  (error (e) (handle-llm-error "ask-my-documents"
                                               (princ-to-string e)
