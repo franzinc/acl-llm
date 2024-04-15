@@ -281,7 +281,8 @@ Authorization: API-KEY
       (verbose nil)
       (top-n *openai-default-top-n*)
       (min-score *openai-default-min-score*)
-      (vector-database-name #+acl-llm-build llm::*default-vector-database-name*))
+      (vector-database-name #+acl-llm-build llm::*default-vector-database-name*)
+      #-acl-llm-build (selector nil))
 
     key-args-signature
     '(
@@ -307,6 +308,7 @@ Authorization: API-KEY
       :vector-database-name vector-database-name
       :top-n top-n
       :min-score min-score
+      #-acl-llm-build :selector #-acl-llm-build selector
       )
 
     key-args-pushjso
@@ -343,6 +345,7 @@ Authorization: API-KEY
                   min-score  ;; unused var
                   top-n      ;; unused var
                   vector-database-name ;; unused var
+                  #-acl-llm-build  selector   ;; unused var
                   (when (stringp prompt-or-messages)
                     (setf prompt-or-messages `(("user" . ,prompt-or-messages))))
                   (loop  for (role . content) in (reverse prompt-or-messages)
@@ -385,6 +388,7 @@ Authorization: API-KEY
                  vector-database-name ;; unused
                  min-score ;; unused
                  top-n ;; unused
+                 #-acl-llm-build selector ;; unused
                  (setf model *openai-default-chat-model*)
                  (pushjso "prompt" prompt-or-messages jso)
                  ,@key-args-pushjso
@@ -619,7 +623,8 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                              (setq matches (db.agraph:vector-store-nearest-neighbor query
                                                                                     :db db
                                                                                     :min-score min-score
-                                                                                    :top-n top-n))
+                                                                                    :top-n top-n
+                                                                                    :selector selector))
 
 
 
