@@ -18,5 +18,5 @@
      ;;(:file "llama-cpp" :depends-on ("util"))
      (:file "openai" :depends-on ("util"))
      (:file "serp" :depends-on ("util"))
+     (:file "protocol")
      ))
-

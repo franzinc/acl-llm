@@ -19,5 +19,6 @@
 ;;; load the :gpt package definitions
                   "openai.cl"
                   "serp.cl"
+                  "protocol.cl"
                   ))
     (load (compile-file file))))
