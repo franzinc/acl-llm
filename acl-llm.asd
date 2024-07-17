@@ -19,4 +19,5 @@
      (:file "openai" :depends-on ("util"))
      (:file "serp" :depends-on ("util"))
      (:file "protocol")
+     (:file "ollama" :depends-on ("protocol"))
      ))

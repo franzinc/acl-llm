@@ -20,5 +20,6 @@
                   "openai.cl"
                   "serp.cl"
                   "protocol.cl"
+                  "ollama.cl"
                   ))
     (load (compile-file file))))
