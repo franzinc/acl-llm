@@ -105,7 +105,7 @@ we can end stuck requests.")
   "Return non-nil if `status' is a successful HTTP status code."
   (<= 200 status 299))
 
-(defun llm-reqeust-sync (url &key headers content timeout)
+(defun llm-request-sync (url &key headers content timeout)
   "Make a request to URL. The raw text response will be parsed to a `st-json:jso'
 and then returned.
 
@@ -124,8 +124,7 @@ required.
         :external-format :utf-8
         :timeout (or timeout *llm-request-timeout*)
         :return :stream)
-    (when (not (llm-request-success-p status))
-      (error "LLM request of ~s returns non-successful status code: ~d" url status))
+    (declare (ignore status))
     (unwind-protect (st-json:read-json in)
       (close in))))
 
@@ -372,7 +371,7 @@ far.")
     (error "LLM vendor was nil. Please set the vendor in the application you are using."))
   (:method ((vendor llm-standard-chat-vendor) prompt)
     (llm-vendor-request-prelude vendor)
-    (let* ((response (llm-reqeust-sync
+    (let* ((response (llm-request-sync
                       (llm-vendor-chat-url vendor)
                       :headers (llm-vendor-headers vendor)
                       :content (llm-vendor-chat-request vendor prompt nil)
@@ -546,7 +545,7 @@ in `llm-vendor-streaming-media-handler'. This should return a list of
   (:documentation "Return a vector embedding of `text' from `vendor'.")
   (:method ((vendor llm-standard-full-vendor) text)
     (llm-vendor-request-prelude vendor)
-    (let* ((response (llm-reqeust-sync
+    (let* ((response (llm-request-sync
                       (llm-vendor-embedding-url vendor)
                       :headers (llm-vendor-headers vendor)
                       :content (llm-vendor-embedding-request vendor text)
