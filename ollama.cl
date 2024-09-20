@@ -8,12 +8,6 @@
 (defvar *llm-ollama-chat-timeout* 300
   "Timeout for sync ollama chat calls.")
 
-(defparameter *llm-ollama-scheme* "http")
-(defparameter *llm-ollama-host* "localhost")
-(defparameter *llm-ollama-port* 11434)
-(defparameter *llm-ollama-chat-model* nil)
-(defparameter *llm-ollama-embedding-model* nil)
-
 (defclass llm-ollama (llm-standard-full-vendor)
   ((scheme :initarg :scheme :initform "http" :accessor llm-ollama-scheme)
    (host :initarg :host :initform "localhost" :accessor llm-ollama-host)
