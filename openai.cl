@@ -254,7 +254,7 @@ Authorization: API-KEY
       max-tokens
       (model *openai-default-ask-chat-model*)
       n
-      output-format
+      (output-format :text)
       presence-penalty
       stop
       stream
