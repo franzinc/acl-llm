@@ -3,33 +3,16 @@
 
 ;; call set-openapi-key before calling any of these functions
 (defvar *openai-api-key* "missing")
-(defvar *openai-default-ask-chat-model* "gpt-3.5-turbo")
-(defvar *openai-default-chat-model* "text-davinci-003")
-(defvar *openai-default-max-tokens* 2048)
 
-(defvar *openai-default-fine-tune-model*  "davinci")
-(defvar *openai-default-initial-delay* 0.25)
-(defvar *openai-default-retries* 4)
-(defvar *openai-default-n* 1)
-(defvar *openai-default-stop* "")
-
-(defvar *openai-default-best-of* nil)
-(defvar *openai-default-echo* nil)
-(defvar *openai-default-frequency-penalty* 0.0)
-(defvar *openai-default-functions* nil)
-(defvar *openai-default-function-call* nil)
-(defvar *openai-default-logit-bias* nil)
-(defvar *openai-default-logprobs* nil)
-(defvar *openai-default-output-format* :text)
-(defvar *openai-default-presence-penalty* 0.0)
-(defvar *openai-default-stream* :false)
-(defvar *openai-default-suffix* nil)
-(defvar *openai-default-temperature* 0.8)
-(defvar *openai-default-timeout* 120)
-(defvar *openai-default-top-p* 0.95)
-(defvar *openai-default-user* "anonymous")
-(defvar *openai-default-min-score* 0.0)
 (defvar *openai-default-top-n* 10)
+(defvar *openai-default-retries* 4)
+(defvar *openai-default-timeout* 120)
+(defvar *openai-default-min-score* 0.0)
+(defvar *openai-default-initial-delay* 0.25)
+(defvar *openai-default-fine-tune-model*  "davinci")
+(defvar *openai-default-chat-model* "text-davinci-003")
+(defvar *openai-default-ask-chat-model* "gpt-4o")
+
 (defvar *openai-api-url* "https://api.openai.com/v1")
 
 (defconstant *ignore-chars*
@@ -39,6 +22,8 @@
 (defun set-openai-api-key (key)
   (setf *openai-api-key*
         (string-trim *ignore-chars* key)))
+
+
 
 (defun call-openai (cmd &key
                           (method :get)
@@ -259,27 +244,27 @@ Authorization: API-KEY
 (eval-when (compile load eval)
   (setq key-args-list
     '(
-      (best-of *openai-default-best-of*)
-      (echo *openai-default-echo*)
-      (frequency-penalty *openai-default-frequency-penalty*)
-      (functions *openai-default-functions*)
-      (function-call *openai-default-function-call*)
-      (logit-bias *openai-default-logit-bias*)
-      (logprobs *openai-default-logprobs*)
-      (max-tokens *openai-default-max-tokens*)
+      best-of
+      echo
+      frequency-penalty
+      functions
+      function-call
+      logit-bias
+      logprobs
+      max-tokens
       (model *openai-default-ask-chat-model*)
-      (n *openai-default-n*)
-      (output-format *openai-default-output-format*)
-      (presence-penalty *openai-default-presence-penalty*)
-      (stop *openai-default-stop*)
-      (stream *openai-default-stream*)
-      (suffix *openai-default-suffix*)
-      (temperature *openai-default-temperature*)
-      (timeout *openai-default-timeout*)
-      (top-p *openai-default-top-p*)
-      (user  *openai-default-user*)
-      (verbose nil)
-      (top-n *openai-default-top-n*)
+      n
+      (output-format :text)
+      presence-penalty
+      stop
+      stream
+      suffix
+      temperature
+      timeout
+      top-p
+      user
+      verbose
+      (top-n  *openai-default-top-n*)
       (min-score *openai-default-min-score*)
       (vector-database-name #+acl-llm-build llm::*default-vector-database-name*)
       #-acl-llm-build (selector nil))
@@ -315,21 +300,21 @@ Authorization: API-KEY
     '(
       (when best-of (pushjso "best_of" best-of jso))
       (when echo (pushjso "echo" best-of jso))
-      (pushjso "frequency_penalty" frequency-penalty jso)
-      (when functions (pushjso "functions" functions jso))
+      (when frequency-penalty (pushjso "frequency_penalty" frequency-penalty jso))
+      (when functions (when functions (pushjso "functions" functions jso)))
       (when function-call (pushjso "function_call" function-call jso))
       (when logit-bias (pushjso "logit_bias" logit-bias jso))
       (when logprobs (pushjso "logprobs" logprobs jso)) ;;; small bug uncovered while documentating
-      (pushjso "max_tokens" max-tokens jso)
-      (pushjso "model" model jso)
-      (pushjso "n" n jso)
-      (pushjso "presence_penalty" presence-penalty jso)
-      (pushjso "stop" stop jso)
-      (pushjso "stream" stream jso)
+      (when max-tokens (pushjso "max_tokens" max-tokens jso))
+      (when n (pushjso "n" n jso))
+      (when presence-penalty (pushjso "presence_penalty" presence-penalty jso))
+      (when stop (pushjso "stop" stop jso))
+      (when stream (pushjso "stream" stream jso))
       (when suffix (pushjso "suffix" suffix jso))
-      (pushjso "temperature" temperature jso)
-      (pushjso "top_p" top-p jso)
-      (pushjso "user" user jso))))
+      (when temperature (pushjso "temperature" temperature jso))
+      (when top-p (pushjso "top_p" top-p jso))
+      (when user (pushjso "user" user jso))
+      (pushjso "model" model jso))))
 
 
 
