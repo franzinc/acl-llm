@@ -11,46 +11,53 @@
   ;; LLM request
   (:export #:*llm-request-timeout*
            #:llm-request-sync)
-  ;; Classes and accessors
+  ;; Classes, Structs, Constructors and Accessors
   (:export #:llm-standard-vendor
            #:llm-standard-chat-vendor
            #:llm-standard-chat-vendor-default-chat-temperature
            #:llm-standard-chat-vendor-default-chat-max-tokens
            #:llm-standard-chat-vendor-default-chat-non-standard-params
            #:llm-standard-full-vendor
+           ;; llm-chat-prompt
            #:llm-chat-prompt
+           #:make-llm-chat-prompt
+           #:copy-llm-chat-prompt
            #:llm-chat-prompt-context
            #:llm-chat-prompt-examples
            #:llm-chat-prompt-exchanges
-           #:llm-chat-prompt-functions
+           #:llm-chat-prompt-tools
            #:llm-chat-prompt-temperature
            #:llm-chat-prompt-max-tokens
+           #:llm-chat-prompt-response-format
            #:llm-chat-prompt-non-standard-params
+           ;; llm-chat-prompt-exchange
            #:llm-chat-prompt-exchange
+           #:make-llm-chat-prompt-exchange
+           #:copy-llm-chat-prompt-exchange
            #:llm-chat-prompt-exchange-role
            #:llm-chat-prompt-exchange-content
-           #:llm-chat-prompt-exchange-function-call-result
-           #:llm-chat-prompt-function-call-result
-           #:llm-chat-prompt-function-call-result-call-id
-           #:llm-chat-prompt-function-call-result-function-name
-           #:llm-chat-prompt-function-call-result-result
-           #:llm-function-call
-           #:llm-function-call-function
-           #:llm-function-call-name
-           #:llm-function-call-description
-           #:llm-function-call-args
-           #:llm-function-arg
-           #:llm-function-arg-name
-           #:llm-function-arg-description
-           #:llm-function-arg-type
-           #:llm-function-arg-required)
+           #:llm-chat-prompt-exchange-tool-results
+           ;; llm-chat-prompt-tool-result
+           #:llm-chat-prompt-tool-result
+           #:make-llm-chat-prompt-tool-result
+           #:copy-llm-chat-prompt-tool-result
+           #:llm-chat-prompt-tool-result-call-id
+           #:llm-chat-prompt-tool-result-tool-name
+           #:llm-chat-prompt-tool-result-result
+           ;; llm-tool
+           #:llm-tool
+           #:make-llm-tool
+           #:llm-tool-function
+           #:llm-tool-name
+           #:llm-tool-description
+           #:llm-tool-args)
   ;; Generic functions
   (:export #:llm-capabilities
            #:llm-chat-token-limit
            #:llm-cancel-request
            #:llm-vendor-request-prelude
            #:llm-vendor-headers
-           #:make-llm-chat-prompt
+           ;; Chat
            #:llm-chat-prompt-append-response
            #:llm-chat
            #:llm-chat-async
@@ -63,9 +70,10 @@
            #:llm-vendor-chat-extract-result
            #:llm-vendor-append-to-prompt
            #:llm-vendor-streaming-media-handler
-           #:llm-vendor-extract-function-calls
-           #:llm-vendor-populate-function-calls
+           #:llm-vendor-extract-tool-uses
+           #:llm-vendor-populate-tool-uses
            #:llm-vendor-collect-streaming-function-data
+           ;; Embeddings
            #:llm-embedding
            #:llm-embedding-async
            #:llm-embedding-url
@@ -79,14 +87,19 @@
    #:llm-vendor-utils-combine-to-user-prompt
    #:llm-vendor-utils-collapse-history
    #:llm-vendor-utils-model-token-limit
+   #:llm-vendor-utils-convert-plist-to-jso
+   #:llm-vendor-utils-openai-arguments
+   #:llm-vendor-utils-openai-tool-spec
    #:llm-vendor-utils-append-to-prompt
-   #:llm-vendor-utils-function-call
-   #:llm-vendor-utils-function-call-id
-   #:llm-vendor-utils-function-call-name
-   #:llm-vendor-utils-function-call-args
+   #:llm-vendor-utils-tool-use
+   #:make-llm-vendor-utils-tool-use
+   #:copy-llm-vendor-utils-tool-use
+   #:llm-vendor-utils-tool-use-id
+   #:llm-vendor-utils-tool-use-name
+   #:llm-vendor-utils-tool-use-args
    #:llm-vendor-utils-process-result
-   #:llm-vendor-utils-populate-function-results
-   #:llm-vendor-utils-execute-function-calls))
+   #:llm-vendor-utils-populate-tool-uses
+   #:llm-vendor-utils-execute-tool-uses))
 
 (in-package #:acl-llm.protocol)
 
@@ -164,72 +177,75 @@ effect, however."))
   ()
   (:documentation "A class for LLM vendors that implements both chat and embeddings."))
 
-(defclass llm-chat-prompt ()
-  ((context :initarg :context :accessor llm-chat-prompt-context)
-   (examples :initarg :examples :accessor llm-chat-prompt-examples)
-   (exchanges :initarg :exchanges :accessor llm-chat-prompt-exchanges)
-   (functions :initarg :functions :accessor llm-chat-prompt-functions)
-   (temperature :initarg :temperature :accessor llm-chat-prompt-temperature)
-   (max-tokens :initarg :max-tokens :accessor llm-chat-prompt-max-tokens)
-   (non-standard-params :initarg :non-standard-params :accessor llm-chat-prompt-non-standard-params))
-  (:documentation "This stores all the information needed for a structured chat prompt."))
+(defstruct (llm-chat-prompt (:constructor %make-llm-chat-prompt))
+  "This stores all the information needed for a structured chat prompt."
+  context
+  examples
+  exchanges
+  tools
+  temperature
+  max-tokens
+  response-format
+  non-standard-params)
 
-(defclass llm-chat-prompt-exchange ()
-  ((role :initarg :role :type (member :user :asistant :function) :accessor llm-chat-prompt-exchange-role)
-   (content :initarg :content :accessor llm-chat-prompt-exchange-content)
-   (function-call-result :initarg :function-call-result :accessor llm-chat-prompt-exchange-function-call-result))
-  (:documentation "This defines a single exchange given as part of a chat prompt.
+(defstruct llm-chat-prompt-exchange
+  "This defines a single exchange given as part of a chat prompt.
 
-`role' can be a keyword, of either `user', `assistant', or `function'.
+`role' can be a keyword, of either `user', `assistant', or `tool-results'.
 
-`function-call-results' is a struct of type
-`llm-chat-prompt-function-call-results', which is only populated if `role' is
-`function'. It stores the results of just one function call."))
+`content' is the content of the interaction. It should be either string, or a
+list of tool uses.
 
-(defclass llm-chat-prompt-function-call-result ()
-  ((call-id :initarg :call-id :accessor llm-chat-prompt-function-call-result-call-id)
-   (function-name :initarg :function-name :accessor llm-chat-prompt-function-call-result-function-name)
-   (result :initarg :result :accessor llm-chat-prompt-function-call-result-result))
-  (:documentation "This defines the result from a function call.
+`tool-results' is a list of structs of type `llm-chat-prompt-tool-result', which
+is only populated if `role' is `tool-results'. It stores the results of the
+function calls."
+  role
+  content
+  tool-results)
 
-`call-id' is an ID for this function call, if available.
+(defstruct llm-chat-prompt-tool-result
+  "This defines the result from a tool use.
 
-`function-name' is the name of the function. This is required.
+`call-id' is an ID for this tool call, if available.
 
-`result' is the result of the function call. This is required."))
+`tool-name' is the name of the tool. This is required.
 
-(defclass llm-function-call ()
-  ((function :initarg :function :accessor llm-function-call-function)
-   (name :initarg :name :accessor llm-function-call-name)
-   (description :initarg :description :accessor llm-function-call-description)
-   (args :initarg :args :accessor llm-function-call-args))
-  (:documentation "This is a class to represent a function call the LLM can make.
+`result' is the result of the tool call. This is required."
+  call-id
+  tool-name
+  result)
 
-`function' is a function to call.
+(defclass llm-tool ()
+  ((function :initform nil :initarg :function :accessor llm-tool-function)
+   (name :initform nil :initarg :name :accessor llm-tool-name)
+   (description :initform nil :initarg :description :accessor llm-tool-description)
+   (args :initform nil :initarg :args :accessor llm-tool-args)
+   (async :initform nil :initarg :async :accessor llm-tool-async))
+  (:documentation "This is a class to represent a singal tool available to the LLM.
 
-`name' is a human readable name of the function.
+`function' is a Lisp function to call.
 
-`description' is a human readable description of the function.
+`name' is a human readable name of the tool.
 
-`args' is a list of `llm-function-arg' instances."))
+`description' is a human readable description of the tool.
 
-(defclass llm-function-arg ()
-  ((name :initarg :name :accessor llm-function-arg-name)
-   (description :initarg :description :accessor llm-function-arg-description)
-   (type :initarg :type :accessor llm-function-arg-type)
-   (required :initarg :required :accessor llm-function-arg-required))
-  (:documentation "An argument to an `llm-function-call'.
+`args' is a list of plists, each plist having the keys `:name', `:type',
+`:description', and `:optional'. `:type' is a string, and the same set of types
+as in `response-format' arg in `llm-make-chat-prompt': `string', `integer',
+`boolean', `float', or `array'. There can be an `:enum' field as well, with a
+vector of possible values.
 
-`name' is the name of the argument.
+`async', if non-nil, means the function will be passed a callback which takes
+the return value, otherwise the callback is not passed, and the function's
+return value will be used."))
 
-`description' is a human readable description of the argument. It can be nil for
-enums.
-
-`type' is the type of the argument. It can be one of `string', `integer',
-`float', `boolean' or a more complicated type specifier, e.g. `(or <type1>
-<type2> ... <typen>)'.
-
-`required' is whether this is required or not."))
+(defun make-llm-tool (&key function name description args async)
+  (make-instance 'llm-tool
+                 :function function
+                 :name name
+                 :description description
+                 :args args
+                 :async async))
 
 ;;; Generic functions
 (defgeneric llm-capabilities (vendor)
@@ -238,14 +254,16 @@ enums.
 This possible values are only those things that are not the bare minimum of
 functionality to be included in this package, which is non-streaming chat:
 
-`streaming': the LLM can actually stream responses in the streaming call. Calls
+`:streaming': the LLM can actually stream responses in the streaming call. Calls
 to `llm-chat-streaming' will work regardless even if the LLM doesn't support
 streaming, it just won't have any partial responses, so basically just operates
 like `llm-chat-async'.
 
-`embeddings': the LLM can return vector embeddings of text.
+`:embeddings': the LLM can return vector embeddings of text.
 
-`function-calls': the LLM can call functions.")
+`:embeddings-batch': the LLM can return many vector embeddings at the same time.
+
+`:tool-uses': the LLM can call functions.")
   (:method (vendor)
     (declare (ignore vendor))
     nil))
@@ -281,9 +299,9 @@ reasonable lower bound.
     "By default, the standard vendor has no headers."
     nil))
 
-(defun make-llm-chat-prompt (text &key context examples functions
-                                    temperature max-tokens
-                                    non-standard-params)
+(defun make-llm-chat-prompt (content &key context examples tools
+                                       temperature max-tokens response-format
+                                       non-standard-params)
   "Create a `llm-chat-prompt' with `text' sent to the LLM vendor.
 
 This is the most correct and easy way to create an `llm-chat-prompt', and should
@@ -297,29 +315,45 @@ populated, a best effort is made to do something reasonable, but it may not be
 quite the same on all vendors as the prompt mutating in terms of an actual
 conversation.
 
-`text' is the latest user input to the LLM, the thing to be responded to. This
-is required. This can also be a string, in which case it represents the chat
-history, starting with the user's initial chat, followed by the response, and so
-on. If it is a list, it MUST be an odd number, since the presumption is that it
-ends with the user's latest input to the LLM.
+`content' is the latest user input to the LLM, the thing to be responded to, in
+form of a string containing text or an `llm-multipart' object containing both
+text and media. This is required. This can also be a list, in which case it
+represents the chat history, starting with the user's initial chat, followed by
+the response, and so on. If it is a list, it MUST be an odd number, since the
+presumption is that it ends with the user's latest input to the LLM.
 
-`context' is a string given to the LLM as context for the entire exchange,
-such as instructions to the LLM on how to reply, persona, information on the
-user, or anything else that applies to the chat as a whole. This is optional.
+ `context' is a string given to the LLM as context for the entire exchange, such
+as instructions to the LLM on how to reply, persona, information on the user, or
+anything else that applies to the chat as a whole. This is optional.
 
 `examples' is a list of conses, where the car is an example inputs, and cdr is
 the corresponding example outputs. This is optional.
 
-`functions' is a list of `llm-function-call' structs. These may be called IF the
-LLM supports them. If the LLM does not support them, a `not-implemented' signal
-will be thrown. This is optional. When this is given, the LLM will either call
-the function or return text as normal, depending on what the LLM decides.
+`tools' is a list of `llm-tool' structs. These may be called IF the LLM supports
+them. If the LLM does not support them, a `not-implemented' signal will be
+thrown. This is optional. When this is given, the LLM will either call the
+function or return text as normal, depending on what the LLM decides.
 
 `temperature' is a floating point number with a minimum of 0, and maximum of 1,
 which controls how predictable the result is, with 0 being the most
 predicatable, and 1 being the most creative. This is not required.
 
 `max-tokens' is the maximum number of tokens to generate. This is optional.
+
+If `response-format' is `:json' (the currently only accepted keyword value), we
+will attempt to force ouput to fit the format. This should not be used with
+function calling. If this is the instructions to the LLM should tell the model
+about the format, for example with JSON format by including examples or
+describing the schema. This can also be a structure defining the JSON schema,
+which will be passed directly to `llm-vendor-utils-convert-plist-to-jso',
+following the JSON schema rules (see http://json-schema.org). The structure is
+plist that can be either `(:type <type> <additional-properties...>)', or in the
+case of enums `(:enum [val1 val2 ... valn])'. All types and values used as the
+values in plists and vectors should be strings, not symbols. LLMs will often
+require the top-level schema passed in to be an object: `(:type \"object\"
+:properties (:val <schema> :other-val <other-schema>) :required [\"val\"
+\"other-val\"])'. Often, all properties must be required. Arrays can be
+specified with `(:type \"array\" :items <schema>)'.
 
 `context', `examples', `functions', `temperature', and `max-tokens' are usually
 turned into part of the exchange, and if so, they will be put in the first
@@ -330,31 +364,32 @@ not know how to handle. These are expected to be vendor specific. Don't use this
 if you want the prompt to be used amongst different vendors, because it is
 likely to cause a request error. The cars of the alist are strings and the cdrs
 can be strings or numbers. This is optional."
-  (when (null text)
+  (when (null content)
     (error "TEXT must NOT be nil"))
-  (when (and (listp text)
-             (zerop (mod (length text) 2)))
+  (when (and (listp content)
+             (zerop (mod (length content) 2)))
     (error "TEXT, when given as a list, must have an odd number of elements"))
-  (make-instance 'llm-chat-prompt
-                 :context context
-                 :examples examples
-                 :exchanges (loop for i from 0
-                                     for s in (if (listp text) text (list text))
-                                     collect (make-instance 'llm-chat-prompt-exchange
-                                                            :role (if (zerop (mod i 2)) 'user 'assistant)
-                                                            :content s))
-                 :functions functions
-                 :temperature temperature
-                 :max-tokens max-tokens
-                 :non-standard-params non-standard-params))
+  (%make-llm-chat-prompt
+   :context context
+   :examples examples
+   :exchanges (loop for i from 0
+                    for s in (if (listp content) content (list content))
+                    collect (make-llm-chat-prompt-exchange
+                             :role (if (zerop (mod i 2)) 'user 'assistant)
+                             :content s))
+   :tools tools
+   :temperature temperature
+   :max-tokens max-tokens
+   :response-format response-format
+   :non-standard-params non-standard-params))
 
 (defun llm-chat-prompt-append-response (prompt response &optional role)
   "Append a new `response' to `prompt', to continue a conversation.
 `role' default to `user', which should almost always be what is needed."
   (setf (llm-chat-prompt-exchanges prompt)
         (append (llm-chat-prompt-exchanges prompt)
-                (list (make-instance 'llm-chat-prompt-exchange :role (or role 'user)
-                                                                  :content response)))))
+                (list (make-llm-chat-prompt-exchange :role (or role 'user)
+                                                     :content response)))))
 
 (defgeneric llm-chat (vendor prompt)
   (:documentation "Return a response to PROMPT from VENDOR.
@@ -376,13 +411,23 @@ far.")
                       :headers (llm-vendor-headers vendor)
                       :content (llm-vendor-chat-request vendor prompt nil)
                       :timeout (llm-vendor-chat-timeout vendor)))
+           (final-result nil)
            (err (llm-vendor-chat-extract-error vendor response)))
       (if* err
          then (error err)
-         else (llm-vendor-utils-process-result vendor
-                                               prompt
-                                               (llm-vendor-chat-extract-result vendor response)
-                                               (llm-vendor-extract-function-calls vendor response))))))
+         else (llm-vendor-utils-process-result
+               vendor
+               prompt
+               (llm-vendor-chat-extract-result vendor response)
+               (llm-vendor-extract-tool-uses vendor response)
+               (lambda (result)
+                 (setq final-result result)))
+              ;; In most cases, final-result will be available immediately.  However, when
+              ;; executing tools, we need to wait for their callbacks, and only after
+              ;; those are called with this be ready.
+              (while (not final-result)
+                (sleep 0.1))
+              final-result))))
 
 (defgeneric llm-chat-async (vendor prompt response-callback error-callback)
   (:documentation "Call `response-callback' with a response to `prompt' from `vendor'.
@@ -488,15 +533,15 @@ Return nil for the standard timeout.")
 (defgeneric llm-vendor-chat-extract-result (vendor response)
   (:documentation "Return the result from `response' for the `vendor'."))
 
-(defgeneric llm-vendor-append-to-prompt (vendor prompt result &optional function-results)
+(defgeneric llm-vendor-append-to-prompt (vendor prompt result &optional tool-results)
   (:documentation "Append `result' to `prompt' for the `vendor'.
 
 `prompt' is the prompt that was already sent to the vendor.
 
-`function-results' is a list of function results, if any.")
-  (:method ((vendor llm-standard-chat-vendor) prompt result &optional function-results)
+`tool-results' is a list of tool results, if any.")
+  (:method ((vendor llm-standard-chat-vendor) prompt result &optional tool-results)
     "By default, we just append to the prompt."
-    (llm-vendor-utils-append-to-prompt prompt result function-results)))
+    (llm-vendor-utils-append-to-prompt prompt result tool-results)))
 
 (defgeneric llm-vendor-streaming-media-handler (vendor msg-receiver fc-receiver err-receiver)
   (:documentation "Define how to handle streaming media for the `vendor'.
@@ -513,20 +558,20 @@ should call `err-receiver' with the error message.")
     (declare (ignore msg-receiver fc-receiver err-receiver))
     nil))
 
-(defgeneric llm-vendor-extract-function-calls (vendor response)
-  (:documentation "Return the function call results from `response' for the `vendor'.
+(defgeneric llm-vendor-extract-tool-uses (vendor response)
+  (:documentation "Return the tool uses results from `response' for the `vendor'.
 
-If there are no function call results, return nil. If there are function call
-results, return a list of `llm-vendor-utils-function-call'.")
+If there are no tool uses, return nil. If there are tool uses, return a list of
+`llm-vendor-utils-tool-use'.")
   (:method ((vendor llm-standard-chat-vendor) response)
     "By default, the standard vendor has no function call extractor."
     (declare (ignore response))
     nil))
 
-(defgeneric llm-vendor-populate-function-calls (vendor prompt calls)
-  (:documentation "For `vendor', in `prompt', record function call execution.
-This is the recording before the calls were executed. `calls' are a list of
-`llm-vendor-utils-function-call'."))
+(defgeneric llm-vendor-populate-tool-uses (vendor prompt tool-uses)
+  (:documentation "For `vendor', in `prompt', record `tool-uses'.
+This is the recording before the function calls were executed, in the prompt.
+`tool-uses' are a list of `llm-vendor-utils-tool-use'."))
 
 (defgeneric llm-vendor-collect-streaming-function-data (vendor data)
   (:documentation "Transform a list of streaming function call `data' responses.
@@ -599,7 +644,7 @@ Return nil if there is no error.")
 `example-prelude' is a string to prepend to the examples."
   (string+
    (llm-chat-prompt-context prompt)
-   (when (llm-chat-prompt-context prompt) "\n")
+   (when (llm-chat-prompt-context prompt) #\Newline)
    (when (llm-chat-prompt-examples prompt)
      (or example-prelude
          (string+
@@ -607,11 +652,12 @@ Return nil if there is no error.")
               "Here is an example"
               (format nil "Here are ~d examples"
                       (length (llm-chat-prompt-examples prompt))))
-          " of how to respond:\n")))
-   (when (llm-chat-prompt-examples prompt) "\n")
+          " of how to respond:"
+          #\Newline)))
+   (when (llm-chat-prompt-examples prompt) #\Newline)
    (format nil "~{~a~^~%~}"
            (mapcar (lambda (example)
-                     (format nil "User: ~a\nAssistant: ~a"
+                     (format nil "User: ~a~%Assistant: ~a"
                              (car example)
                              (cdr example)))
                    (llm-chat-prompt-examples prompt)))))
@@ -634,11 +680,11 @@ If there is an assistance response, do nothing.
       (if* system-prompt
          then (setf (llm-chat-prompt-exchange-content system-prompt)
                     (string+ (llm-chat-prompt-exchange-content system-prompt)
-                             "\n"
-                             system-content))
-         else (push (make-instance 'llm-chat-prompt-exchange
-                                    :role 'system
-                                    :content system-content)
+                             #\Newline
+                              system-content))
+         else (push (make-llm-chat-prompt-exchange
+                     :role 'system
+                     :content system-content)
                     (llm-chat-prompt-exchanges prompt))
               (setf (llm-chat-prompt-context prompt) nil
                     (llm-chat-prompt-examples prompt) nil)))))
@@ -652,7 +698,7 @@ This should be used for vendors that do not have a notion of a system prompt.
     (when system-content
       (setf (llm-chat-prompt-exchange-content (car (llm-chat-prompt-exchanges prompt)))
             (string+ system-content
-                     "\n"
+                     #\Newline
                      (llm-chat-prompt-exchange-content (car (llm-chat-prompt-exchanges prompt))))
             (llm-chat-prompt-context prompt) nil
             (llm-chat-prompt-examples prompt) nil))))
@@ -669,20 +715,22 @@ warning when using this.
 will follow."
   (when (> (length (llm-chat-prompt-exchanges prompt)) 1)
     (setf (llm-chat-prompt-exchanges prompt)
-          (list (make-instance 'llm-chat-prompt-exchange
-                               :role 'user
-                               :content
-                               (string+ (or history-prelude "Previous exchanges:")
-                                        "\n\n"
-                                        (format nil "~{~a~^~%~}"
-                                                (mapcar (lambda (exchange)
-                                                          (format nil "~a: ~a" (case (llm-chat-prompt-exchange-role exchange)
-                                                                                 (user "User")
-                                                                                 (assistant "Assistant"))
-                                                                  (llm-chat-prompt-exchange-content exchange)))
-                                                        (butlast (llm-chat-prompt-exchanges prompt))))
-                                        "\n\nThe current conversation follows:\n\n"
-                                        (llm-chat-prompt-exchange-content (car (last (llm-chat-prompt-exchanges prompt))))))))))
+          (list (make-llm-chat-prompt-exchange
+                 :role 'user
+                 :content
+                 (string+ (or history-prelude "Previous exchanges:")
+                          #\Newline #\Newline
+                          (format nil "~{~a~^~%~}"
+                                  (mapcar (lambda (exchange)
+                                            (format nil "~a: ~a" (case (llm-chat-prompt-exchange-role exchange)
+                                                                   (user "User")
+                                                                   (assistant "Assistant"))
+                                                    (llm-chat-prompt-exchange-content exchange)))
+                                          (butlast (llm-chat-prompt-exchanges prompt))))
+                          #\Newline #\Newline
+                          "The current conversation follows:"
+                          #\Newline #\Newline
+                          (llm-chat-prompt-exchange-content (car (last (llm-chat-prompt-exchanges prompt))))))))))
 
 (defun llm-vendor-utils-model-token-limit (model)
   "Return the token limit for `model'."
@@ -699,67 +747,162 @@ will follow."
       ((match-re "llama" model) 2048)
       ((match-re "starcoder" model) 8192))))
 
-(defun llm-vendor-utils-append-to-prompt (prompt output &optional func-results role)
+(defun llm-vendor-utils-convert-plist-to-jso (plist)
+  "Convert `plist' to a `st-json:jso' instance.
+
+The expectation is that any symbol values will be converted to strings for plist
+and any nested plists."
+  (loop with jso = (st-json:jso)
+        for (k v) on plist by #'cddr
+        do (setf (st-json:getjso (string+ k) jso)
+                 (typecase v
+                   (symbol (string+ v))
+                   (list (llm-vendor-utils-convert-plist-to-jso v))
+                   (t v)))
+        finally (return jso)))
+
+(defun llm-vendor-utils-openai-arguments (args)
+  "Convert `args' to the OpenAI function calling spec.
+`args' is a list of llm argument plists.
+Each plist has the structure:
+  (:name STRING
+   :type KEYWORD
+   :description STRING
+   :optional BOOLEAN
+   :properties PLIST
+   :enum VECTOR
+   :items (PLIST :type SYMBOL :enum VECTOR :properties PLIST))
+
+`:type' is followed by a keyword, one of `:string', `:number', `:boolean',
+`integer', `:object', `:array', or `:enum'.
+
+See OpenAI's documentation for more details:
+https://platform.openai.com/docs/guides/structured-outputs?lang=python#supported-schemas"
+  (loop with properties = (st-json:jso)
+        with required-names = nil
+        for arg in args
+        for arg-name = (getf arg :name)
+        for type = (string+ (getf arg :type))
+        for description = (getf arg :description)
+        for required = (not (getf arg :optional))
+        for enum = (getf arg :enum)
+        for items = (getf arg :items)
+        for obj-properties = (llm-vendor-utils-convert-plist-to-jso (getf arg :properties))
+        for schema = (st-json:jso "type" type)
+        do (progn
+             (when description
+               (setf (st-json:getjso "description" schema) description))
+             (when enum
+               (setf (st-json:getjso "enum" schema) enum))
+             (when items
+               (setf (st-json:getjso "items" schema) (llm-vendor-utils-convert-plist-to-jso items)))
+             (when obj-properties
+               (setf (st-json:getjso "properties" schema) obj-properties))
+             (when required
+               (push (if (symbolp arg-name) (string+ arg-name) arg-name)
+                     required-names))
+             (setf (st-json:getjso arg-name properties) schema))
+        finally (let ((spec (st-json:jso
+                             "type" "object"
+                             "properties" properties)))
+                  (when required-names
+                    (setf (st-json:getjso "required" spec)
+                          (nreverse required-names)))
+                  (return spec))))
+
+(defgeneric llm-vendor-utils-openai-tool-spec (tool)
+  (:documentation "Convert `tool' to an Open AI function spec.")
+  ;; The Open AI tool spec follows the JSON schema spec.  See
+  ;; https://json-schema.org/understanding-json-schema.
+  (:method ((tool llm-tool))
+    "Convert `tool' to an Open AI function spec.
+Open AI's function spec is a standard way to do this, and will be applicable to
+many endpoints.
+
+This returns a `st-json:jso' object."
+    (st-json:jso
+     "type" "function"
+     "function" (st-json:jso
+                 "name" (llm-tool-name tool)
+                 "description" (llm-tool-description tool)
+                 "parameters" (llm-vendor-utils-openai-arguments
+                               (llm-tool-args tool))))))
+
+(defun llm-vendor-utils-append-to-prompt (prompt output &optional tool-results role)
   "Append `output' to `prompt' as an assistant exchange.
 
 `output' can be a string or a structure in the case of function calls.
 
+`tool-results' is a list of results from the LLM output, if any.
+
 `role' will be `assistant' by default, but can be passed in for other roles."
   (setf (llm-chat-prompt-exchanges prompt)
         (append (llm-chat-prompt-exchanges prompt)
-                (list (make-instance 'llm-chat-prompt-exchange
-                                     :role (if* func-results
-                                              then 'function
-                                              else (or role 'assistant))
-                                     :content output
-                                     :function-call-result func-results)))))
+                (list (make-llm-chat-prompt-exchange
+                       :role (or role (if tool-results 'tool-results 'assistant))
+                       ;; If it is a structure, it will get converted to JSON,
+                       ;; otherwise make sure it is a string.  For tool uses, we
+                       ;; want it to be nil.
+                       :content (if* (or (not output)
+                                         (and (not (stringp output))
+                                              (not tool-results)))
+                                   then output
+                                   else output)
+                       :tool-results tool-results)))))
 
-(defclass llm-vendor-utils-function-call ()
-  ((id :initarg :id :accessor llm-vendor-utils-function-call-id)
-   (name :initarg :name :accessor llm-vendor-utils-function-call-name)
-   (args :initarg :args :accessor llm-vendor-utils-function-call-args))
-  (:documentation "A class to hold information about a function call.
+(defstruct llm-vendor-utils-tool-use
+  "A class to hold information about a tool use.
 
 `id' is a call ID, which is optional.
 
 `name' is the function name.
 
-`arg' is an alist of arguments to values."))
+`arg' is an alist of arguments to values."
+  id
+  name
+  args)
 
-(defun llm-vendor-utils-process-result (vendor prompt text funcalls)
+(defun llm-vendor-utils-process-result (vendor prompt text tool-uses success-callback)
   "Process the `response' from the vendor for `prompt'.
 This execute function calls if there are any, does any result appending to the
 prompt, and returns an appropriate response for the client.
 
 `vendor' is the struct that configures the use of the LLM.
 
-`funcalls' is a list of function calls, if any.
+`tool-uses' is a list of function calls, if any.
 
-`text' is the text output from the vendor, if any.  There should
-be either FUNCALLS or TEXT."
-  (if* funcalls
-     then (llm-vendor-utils-execute-function-calls vendor prompt funcalls)
+`text' is the text output from the vendor, if any. There should be either
+`tool-uses' or `text'.
+
+`success-callback' is the callback that will be run when all functions complete."
+  (if* tool-uses
+     then (llm-vendor-utils-execute-tool-uses vendor prompt tool-uses success-callback)
      else (when text
             (llm-vendor-append-to-prompt vendor prompt text))
-          text))
+          (funcall success-callback text)))
 
-(defun llm-vendor-utils-populate-function-results (vendor prompt func result)
-  "Append the `result' of `func' to `prompt'.
+(defun llm-vendor-utils-populate-tool-uses (vendor prompt results-alist)
+  "Append the results in RESULTS-ALIST to the prompt.
 
-`func' is a `llm-vendor-utils-function-call' struct.
+`vendor' is the struct that configures the user of the LLM.
 
-`vendor' is the struct that configures the user of the LLM."
+`prompt' is the prompt to populate into.
+
+`results-alist' is a list of cons of function
+calls (`llm-vendor-utils-function-call' structs) and their
+results."
   (llm-vendor-append-to-prompt
    vendor
    prompt
-   result
-   (make-instance 'llm-chat-prompt-function-call-result
-                  :call-id (llm-vendor-utils-function-call-id func)
-                  :function-name (llm-vendor-utils-function-call-name func)
-                  :result result)))
+   nil
+   (loop for (tool-use . result) in results-alist
+         collect (make-llm-chat-prompt-tool-result
+                  :call-id (llm-vendor-utils-tool-use-id tool-use)
+                  :tool-name (llm-vendor-utils-tool-use-name tool-use)
+                  :result result))))
 
-(defun llm-vendor-utils-execute-function-calls (vendor prompt funcalls)
-  "Execute `funcalls', a list of `llm-vendor-utils-function-calls'.
+(defun llm-vendor-utils-execute-tool-uses (vendor prompt tool-uses success-callback)
+  "Execute `tool-uses', a list of `llm-vendor-utils-tool-uses'.
 
 A response suitable for returning to the client will be returned.
 
@@ -768,22 +911,27 @@ A response suitable for returning to the client will be returned.
 `prompt' was the prompt given to the vendor, which will get updated with the
 response from the LLM, and if there is a function call, the result.
 
-This returns the response suitable for output to the client; a
-cons of functions called and their output."
-  (llm-vendor-populate-function-calls vendor prompt funcalls)
-  (loop for func in funcalls
-        collect (let* ((name (llm-vendor-utils-function-call-name func))
-                       (arguments (llm-vendor-utils-function-call-args func))
-                       (function (find-if
-                                  (lambda (f) (string= name (llm-function-call-name f)))
-                                  (llm-chat-prompt-functions prompt))))
-                  (cons name
-                        (let* ((args (loop for arg in (llm-function-call-args function)
-                                           collect (cdr (find-if (lambda (a)
-                                                                   (eq (intern
-                                                                        (llm-function-arg-name arg))
-                                                                       (car a)))
-                                                                 arguments))))
-                               (result (apply (llm-function-call-function function) args)))
-                          (llm-vendor-utils-populate-function-results vendor prompt func result)
-                          result)))))
+`success-callback' is the callback that will be run when all functions have
+returned results."
+  (llm-vendor-populate-tool-uses vendor prompt tool-uses)
+  (loop with results = (list)
+        with tool-use-and-results = (list)
+        for tool-use in tool-uses
+        for name = (llm-vendor-utils-tool-use-name tool-use)
+        for arguments = (llm-vendor-utils-tool-use-args tool-use)
+        for tool = (find-if
+                    (lambda (tool-name) (string= name tool-name))
+                    (llm-chat-prompt-tools prompt)
+                    :key #'llm-tool-name)
+        for call-args = (loop for arg in (llm-tool-args tool)
+                              collect (st-json:getjso (getf arg :name) arguments))
+        for end-func = (lambda (result)
+                         (push (cons name result) tool-use-and-results)
+                         (push (cons tool-use result) results)
+                         (when (= (length results) (length tool-uses))
+                           (llm-vendor-utils-populate-tool-uses vendor prompt results))
+                         (funcall success-callback tool-use-and-results))
+        do (if* (llm-tool-async tool)
+              then (apply (llm-tool-function tool)
+                          (append (list end-func) call-args))
+              else (funcall end-func (apply (llm-tool-function tool) call-args)))))
