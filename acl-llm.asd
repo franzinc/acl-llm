@@ -21,11 +21,13 @@
      (:file "protocol")
      (:module "vendors"
       :depends-on ("protocol")
-      :components ((:file "openai")
+      :components ((:file "anthropic")
                    (:file "ollama")
+                   (:file "openai")
                    ;; OpenAI-compatible vendors
                    (:module "openai-compatible"
                     :pathname ""
                     :depends-on ("openai")
                     :components ((:file "deepseek")
-                                 (:file "groq")))))))
+                                 (:file "groq")
+                                 (:file "voyage")))))))

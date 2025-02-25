@@ -23,4 +23,5 @@
                   :pathname ""
                   :depends-on ("openai")
                   :components ((:file "deepseek")
-                               (:file "groq")))))))
+                               (:file "groq")
+                               (:file "voyage")))))))
