@@ -595,6 +595,11 @@ in `llm-vendor-streaming-media-handler'. This should return a list of
 
 (defgeneric llm-embedding (vendor text)
   (:documentation "Return a vector embedding of `text' from `vendor'.")
+  (:method :around (vendor text)
+    "A wrapper to configure the default float format for `st-json'"
+    (declare (ignore vendor text))
+    (let ((st-json:*json-read-default-float-format* *llm-embedding-default-float-format*))
+      (call-next-method)))
   (:method ((vendor llm-standard-full-vendor) text)
     (llm-vendor-request-prelude vendor)
     (let* ((response (llm-request-sync
@@ -628,6 +633,11 @@ The list of vectors is in an order corresponding to the order of
 `text-sequence'.
 
 `vendor' is the vendor struct that will be used for an LLM call.")
+  (:method :around (vendor text-sequence)
+    "A wrapper to configure the default float format for `st-json'"
+    (declare (ignore vendor text-sequence))
+    (let ((st-json:*json-read-default-float-format* *llm-embedding-default-float-format*))
+      (call-next-method)))
   (:method ((vendor llm-standard-full-vendor) text-sequence)
     (llm-vendor-request-prelude vendor)
     (let* ((response (llm-request-sync (llm-vendor-embedding-url vendor)
@@ -666,20 +676,6 @@ Return nil if there is no error.")
     "By default, the standard vendor has no error extractor."
     (declare (ignore response))
     nil))
-
-(defgeneric llm-vendor-embedding-extract-result (vendor response)
-  (:documentation "Return the result from `response' for the `vendor'.")
-  (:method :around (vendor response)
-    (declare (ignore vendor response))
-    (let ((st-json:*json-read-default-float-format* *llm-embedding-default-float-format*))
-      (call-next-method))))
-
-(defgeneric llm-vendor-batch-embeddings-extract-result (vendor response)
-  (:documentation "Return the result from `response' for the `vendor' for a batch request.")
-  (:method :around (vendor response)
-    (declare (ignore vendor response))
-    (let ((st-json:*json-read-default-float-format* *llm-embedding-default-float-format*))
-      (call-next-method))))
 
 ;;;; Utilities
 (defun llm-vendor-utils-get-system-prompt (prompt &optional example-prelude)

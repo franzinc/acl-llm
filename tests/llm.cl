@@ -8,7 +8,7 @@
   ())
 
 (lift:deftestsuite llm-vendor-tests (llm-tests)
-  ()
+  ((query "Why is sky blue?"))
   (:documentation "Test different LLM vendors e.g. OpenAI, Ollama etc."))
 
 (defun ensure-same-jso (lhs rhs)
@@ -26,3 +26,17 @@
          (i 0 (1+ i)))
         ((= i dim) arr)
       (setf (aref arr i) (random-float)))))
+
+(defun get-dummy-api-key-string (&optional len)
+  (when (not len)
+    (setq len (+ 8 (random 33))))
+  (do ((str (make-string len))
+       (i 0 (1+ i)))
+      ((= i len) str)
+    (setf (aref str i)
+          (code-char (+ #.(char-code #\a)
+                        (random 26))))))
+
+(defun get-dummy-api-key-function (&optional len)
+  (let ((str (get-dummy-api-key-string len)))
+    #'(lambda () str)))

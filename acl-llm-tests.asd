@@ -17,4 +17,10 @@
     :serial t
     :components ((:file "llm")
                  (:file "llm-vendor-utils" :depends-on ("llm"))
-                 (:file "ollama" :depends-on ("llm"))))))
+                 (:file "ollama" :depends-on ("llm"))
+                 (:file "openai" :depends-on ("llm"))
+                 (:module "openai-compatible-vendors"
+                  :pathname ""
+                  :depends-on ("openai")
+                  :components ((:file "deepseek")
+                               (:file "groq")))))))

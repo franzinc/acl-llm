@@ -6,11 +6,11 @@
    (query "Why is sky blue?"))
   (:setup (setf ollama (make-llm-ollama :chat-model nil :embedding-model nil))))
 
-(addtest (llm-ollama-tests) test-llm-capabilities
+(addtest (llm-ollama-tests) test-llm-ollama-capabilities
   (ensure-same (llm-capabilities ollama)
                '(:streaming :embeddings :embeddings-batch :tool-uses)))
 
-(addtest (llm-ollama-tests) test-llm-name
+(addtest (llm-ollama-tests) test-llm-ollama-name
   (ensure-null (llm-name ollama))
   (setf (llm-ollama-chat-model ollama) "llama3.1")
   (ensure-same (llm-name ollama) "llama3.1" :test 'string=)
@@ -18,7 +18,7 @@
         (llm-ollama-embedding-model ollama) "llama3.2")
   (ensure-same (llm-name ollama) "llama3.2") :test 'string=)
 
-(addtest (llm-ollama-tests) test-llm-vendor-chat-url
+(addtest (llm-ollama-tests) test-llm-ollama-chat-url
   (ensure-same (llm-vendor-chat-url ollama)
                "http://localhost:11434/api/chat")
 
@@ -37,12 +37,12 @@
   (ensure-same (llm-vendor-chat-url ollama)
                "http://localhost:8080/api/chat"))
 
-(addtest (llm-ollama-tests) test-llm-chat-timeout
+(addtest (llm-ollama-tests) test-llm-ollama-chat-timeout
   (let ((*llm-ollama-chat-timeout* (random (1+ 300))))
     (ensure-same (llm-vendor-chat-timeout ollama)
                  *llm-ollama-chat-timeout*)))
 
-(addtest (llm-ollama-tests) test-llm-chat
+(addtest (llm-ollama-tests) test-llm-ollama-chat
   (let ((answer "The sky is blue because it is the color of the sky."))
     ;; mocking `llm-request-sync'
     (def-fwrapper mock-llm-request-sync (url &key headers content timeout)
@@ -65,7 +65,7 @@
                                  answer)
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
 
-(addtest (llm-ollama-tests) test-llm-chat-error
+(addtest (llm-ollama-tests) test-llm-ollama-chat-error
   (let ((err "test-llm-chat-error"))
     ;; mocking `llm-request-sync'
     (def-fwrapper mock-llm-request-sync (url &key headers content timeout)
@@ -76,7 +76,7 @@
     (unwind-protect (ensure-error (llm-chat ollama (make-llm-chat-prompt query)))
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
 
-(addtest (llm-ollama-tests) test-llm-chat-tool-uses
+(addtest (llm-ollama-tests) test-llm-ollama-chat-tool-uses
   (let* ((tool-name "add-two-numbers")
          (tool-description "Add two numbers")
          (tool (make-llm-tool :function #'(lambda (x y) (+ x y))
@@ -117,7 +117,7 @@
                                  answer)
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
 
-(addtest (llm-ollama-tests) test-llm-chat-response-format
+(addtest (llm-ollama-tests) test-llm-ollama-chat-response-format
   (let ((query "List one Sci-Fi and Horror book. Respond using JSON")
         (response-format '(:type "array"
                            :items (:type "object"
@@ -162,7 +162,7 @@
                       (ensure-same "Stephen King"   (st-json:getjso "author" book)))
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
 
-(addtest (llm-ollama-tests) test-llm-embedding-url
+(addtest (llm-ollama-tests) test-llm-ollama-embedding-url
   (ensure-same (llm-vendor-embedding-url ollama)
                "http://localhost:11434/api/embed")
   (ensure-same (llm-vendor-embedding-url ollama)
@@ -183,8 +183,9 @@
   (ensure-same (llm-vendor-embedding-url ollama)
                "http://localhost:8080/api/embed"))
 
-(addtest (llm-ollama-tests) test-llm-embedding
-  (let* ((dim 4096)
+(addtest (llm-ollama-tests) test-llm-ollama-embedding
+  (let* ((*llm-embedding-default-float-format* (nth (random 2) '(single-float double-float)))
+         (dim 4096)
          (embedding (get-dummy-embedding dim)))
     ;; mocking `llm-request-sync'
     (def-fwrapper mock-llm-request-sync (url &key headers content timeout)
@@ -203,7 +204,7 @@
                                  embedding)
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
 
-(addtest (llm-ollama-tests) test-llm-embedding-error
+(addtest (llm-ollama-tests) test-llm-ollama-embedding-error
   (let ((err "test-llm-embedding-error"))
     ;; mocking `llm-request-sync'
     (def-fwrapper mock-llm-request-sync (url &key headers content timeout)
@@ -214,10 +215,11 @@
     (unwind-protect (ensure-error (llm-embedding ollama query))
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
 
-(addtest (llm-ollama-tests) test-llm-batch-embeddings
+(addtest (llm-ollama-tests) test-llm-ollama-batch-embeddings
   (let* ((queries '("Why is sky blue?"
                     "Why is water wet?"
                     "Why did Judas rat to Romans while Jesus slept?"))
+         (*llm-embedding-default-float-format* (nth (random 2) '(single-float double-float)))
          (dim 4096)
          (embeddings (loop for i from 1 to (length queries)
                            collect (get-dummy-embedding dim))))

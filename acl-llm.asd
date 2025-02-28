@@ -19,5 +19,13 @@
      (:file "openai" :depends-on ("util"))
      (:file "serp" :depends-on ("util"))
      (:file "protocol")
-     (:file "ollama" :depends-on ("protocol"))
-     ))
+     (:module "vendors"
+      :depends-on ("protocol")
+      :components ((:file "openai")
+                   (:file "ollama")
+                   ;; OpenAI-compatible vendors
+                   (:module "openai-compatible"
+                    :pathname ""
+                    :depends-on ("openai")
+                    :components ((:file "deepseek")
+                                 (:file "groq")))))))
