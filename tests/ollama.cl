@@ -8,7 +8,7 @@
 
 (addtest (llm-ollama-tests) test-llm-capabilities
   (ensure-same (llm-capabilities ollama)
-               '(:streaming :embeddings :tool-uses)))
+               '(:streaming :embeddings :embeddings-batch :tool-uses)))
 
 (addtest (llm-ollama-tests) test-llm-name
   (ensure-null (llm-name ollama))
@@ -185,9 +185,7 @@
 
 (addtest (llm-ollama-tests) test-llm-embedding
   (let* ((dim 4096)
-         (answer (make-array dim :element-type 'double-float
-                                 :initial-contents (loop for i from 0 below 4096
-                                                         collect (random 1d0)))))
+         (embedding (get-dummy-embedding dim)))
     ;; mocking `llm-request-sync'
     (def-fwrapper mock-llm-request-sync (url &key headers content timeout)
       (ensure-same url (llm-vendor-embedding-url ollama))
@@ -199,10 +197,10 @@
       (ensure-same timeout *llm-ollama-chat-timeout*)
       ;; mocked response
       (st-json:jso
-       "embeddings" (list answer)))
+       "embeddings" (list embedding)))
     (fwrap 'llm-request-sync 'mocked-llm-request-sync 'mock-llm-request-sync)
     (unwind-protect (ensure-same (llm-embedding ollama query)
-                                 answer)
+                                 embedding)
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
 
 (addtest (llm-ollama-tests) test-llm-embedding-error
@@ -214,4 +212,28 @@
       (st-json:jso "error" err))
     (fwrap 'llm-request-sync 'mocked-llm-request-sync 'mock-llm-request-sync)
     (unwind-protect (ensure-error (llm-embedding ollama query))
+      (funwrap 'llm-request-sync 'mocked-llm-request-sync))))
+
+(addtest (llm-ollama-tests) test-llm-batch-embeddings
+  (let* ((queries '("Why is sky blue?"
+                    "Why is water wet?"
+                    "Why did Judas rat to Romans while Jesus slept?"))
+         (dim 4096)
+         (embeddings (loop for i from 1 to (length queries)
+                           collect (get-dummy-embedding dim))))
+    ;; mocking `llm-request-sync'
+    (def-fwrapper mock-llm-request-sync (url &key headers content timeout)
+      (ensure-same url (llm-vendor-embedding-url ollama))
+      (ensure-null headers)
+      (ensure-same queries
+                   (st-json:getjso
+                    "input"
+                    (st-json:read-json-from-string content)))
+      (ensure-same timeout *llm-ollama-chat-timeout*)
+      ;; mocked response
+      (st-json:jso
+       "embeddings" embeddings))
+    (fwrap 'llm-request-sync 'mocked-llm-request-sync 'mock-llm-request-sync)
+    (unwind-protect (ensure-same (llm-batch-embeddings ollama queries)
+                                 embeddings)
       (funwrap 'llm-request-sync 'mocked-llm-request-sync))))

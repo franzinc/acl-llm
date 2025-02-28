@@ -74,12 +74,16 @@
            #:llm-vendor-populate-tool-uses
            #:llm-vendor-collect-streaming-function-data
            ;; Embeddings
+           #:*llm-embedding-default-float-format*
            #:llm-embedding
            #:llm-embedding-async
+           #:llm-batch-embeddings
            #:llm-embedding-url
            #:llm-vendor-embedding-request
+           #:llm-vendor-batch-embeddings-request
            #:llm-vendor-embedding-extract-error
-           #:llm-vendor-embedding-extract-result)
+           #:llm-vendor-embedding-extract-result
+           #:llm-vendor-batch-embeddings-extract-result)
   ;; Utilities
   (:export
    #:llm-vendor-utils-get-system-prompt
@@ -586,6 +590,9 @@ in `llm-vendor-streaming-media-handler'. This should return a list of
     (declare (ignore data))
     nil))
 
+(defparameter *llm-embedding-default-float-format* 'single-float
+  "By default, read floating numbers as 'single-float (32 bit).")
+
 (defgeneric llm-embedding (vendor text)
   (:documentation "Return a vector embedding of `text' from `vendor'.")
   (:method ((vendor llm-standard-full-vendor) text)
@@ -614,6 +621,24 @@ This returns an object representing the async request, which can be passed to
     (declare (ignore text vector-callback error-callback))
     (error "LLM vendor was nil. Please set the vendor in the application you are using")))
 
+(defgeneric llm-batch-embeddings (vendor text-sequence)
+  (:documentation "Return a list of embedding vectors of `text-sequence'.
+
+The list of vectors is in an order corresponding to the order of
+`text-sequence'.
+
+`vendor' is the vendor struct that will be used for an LLM call.")
+  (:method ((vendor llm-standard-full-vendor) text-sequence)
+    (llm-vendor-request-prelude vendor)
+    (let* ((response (llm-request-sync (llm-vendor-embedding-url vendor)
+                                       :headers (llm-vendor-headers vendor)
+                                       :content (llm-vendor-batch-embeddings-request vendor text-sequence)
+                                       :timeout (llm-vendor-chat-timeout vendor)))
+           (err-msg (llm-vendor-embedding-extract-error vendor response)))
+      (if* err-msg
+         then (error err-msg)
+         else (llm-vendor-batch-embeddings-extract-result vendor response)))))
+
 (defgeneric llm-vendor-embedding-url (vendor)
   (:documentation "Return the URL for embeddings for the `vendor'."))
 
@@ -621,6 +646,13 @@ This returns an object representing the async request, which can be passed to
   (:documentation "Return the request for the `vendor' for `text'.")
   (:method :around (vendor text)
     (declare (ignore vendor text))
+    (let ((jso (call-next-method)))
+      (st-json:write-json-to-string jso))))
+
+(defgeneric llm-vendor-batch-embeddings-request (vendor text-sequence)
+  (:documentation "Return the request for the `vendor' for `text-sequence'.")
+  (:method :around (vendor text-sequence)
+    (declare (ignore vendor text-sequence))
     (let ((jso (call-next-method)))
       (st-json:write-json-to-string jso))))
 
@@ -636,7 +668,18 @@ Return nil if there is no error.")
     nil))
 
 (defgeneric llm-vendor-embedding-extract-result (vendor response)
-  (:documentation "Return the result from `response' for the `vendor'."))
+  (:documentation "Return the result from `response' for the `vendor'.")
+  (:method :around (vendor response)
+    (declare (ignore vendor response))
+    (let ((st-json:*json-read-default-float-format* *llm-embedding-default-float-format*))
+      (call-next-method))))
+
+(defgeneric llm-vendor-batch-embeddings-extract-result (vendor response)
+  (:documentation "Return the result from `response' for the `vendor' for a batch request.")
+  (:method :around (vendor response)
+    (declare (ignore vendor response))
+    (let ((st-json:*json-read-default-float-format* *llm-embedding-default-float-format*))
+      (call-next-method))))
 
 ;;;; Utilities
 (defun llm-vendor-utils-get-system-prompt (prompt &optional example-prelude)

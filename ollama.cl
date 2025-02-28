@@ -49,7 +49,7 @@ localhost.
                  :embedding-model embedding-model))
 
 (defmethod llm-capabilities ((vendor llm-ollama))
-  (list :streaming :embeddings :tool-uses))
+  (list :streaming :embeddings :embeddings-batch :tool-uses))
 
 (defmethod llm-name ((vendor llm-ollama))
   (or (llm-ollama-chat-model vendor)
@@ -145,8 +145,15 @@ localhost.
   (st-json:jso "input" text
                "model" (llm-ollama-embedding-model vendor)))
 
+(defmethod llm-vendor-batch-embeddings-request ((vendor llm-ollama) text-sequence)
+  (st-json:jso "input" text-sequence
+               "model" (llm-ollama-embedding-model vendor)))
+
 (defmethod llm-vendor-embedding-extract-result ((vendor llm-ollama) response)
   (first (st-json:getjso "embeddings" response)))
+
+(defmethod llm-vendor-batch-embeddings-extract-result ((vendor llm-ollama) response)
+  (st-json:getjso "embeddings" response))
 
 (defmethod llm-vendor-embedding-extract-error ((vendor llm-ollama) response)
   (st-json:getjso "error" response))

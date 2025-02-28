@@ -15,3 +15,14 @@
   (ensure-same (st-json:jso-normalize lhs)
                (st-json:jso-normalize rhs)
                :test 'equalp))
+
+(defun get-dummy-embedding (dim)
+  (flet ((random-float ()
+           (random (if* (eq *llm-embedding-default-float-format* 'single-float)
+                      then 1f0
+                      else 1d0))))
+    (do ((arr (make-array dim :element-type *llm-embedding-default-float-format*
+                              :allocation :old))
+         (i 0 (1+ i)))
+        ((= i dim) arr)
+      (setf (aref arr i) (random-float)))))
