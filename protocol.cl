@@ -107,6 +107,11 @@
 
 (in-package #:acl-llm.protocol)
 
+
+(defvar *debug-llm* nil
+  "true to print out the http traffic to/from the LLM")
+
+
 ;;; LLM request
 (defvar *llm-request-timeout* nil
   "The number of seconds to wait for a response from a HTTP server.
@@ -122,7 +127,7 @@ we can end stuck requests.")
   "Return non-nil if `status' is a successful HTTP status code."
   (<= 200 status 299))
 
-(defun llm-request-sync (url &key headers content timeout)
+(defun llm-request-sync (url &key headers content timeout basic-authorization)
   "Make a request to URL. The raw text response will be parsed to a `st-json:jso'
 and then returned.
 
@@ -137,12 +142,18 @@ required.
       (do-http-request url
         :method :post
         :content content
+        :basic-authorization basic-authorization
         :headers (append headers '(("Content-Type" . "application/json")))
         :external-format :utf-8
         :timeout (or timeout *llm-request-timeout*)
         :return :stream)
     (declare (ignore status))
-    (unwind-protect (st-json:read-json in)
+    (unwind-protect (let ((jj (st-json:read-json in)))
+                      (if* *debug-llm*
+                         then (format t "~2%Response from LLM:~%")
+                              (pprint jj)
+                              (terpri))
+                      jj)
       (close in))))
 
 ;;; Classes
@@ -213,7 +224,7 @@ function calls."
 `call-id' is an ID for this tool call, if available.
 
 `tool-name' is the name of the tool. This is required.
-
+t
 `result' is the result of the tool call. This is required."
   call-id
   tool-name
@@ -525,6 +536,10 @@ Return nil for the standard timeout.")
   (:method :around ((vendor llm-standard-chat-vendor) prompt streaming)
     (declare (ignore prompt streaming))
     (let ((jso (call-next-method)))
+      (if* *debug-llm*
+         then (format t "~2%chat request:~%")
+              (pprint jso)
+              (terpri))
       (st-json:write-json-to-string jso))))
 
 (defgeneric llm-vendor-chat-extract-error (vendor response)

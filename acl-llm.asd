@@ -30,4 +30,5 @@
                     :depends-on ("openai")
                     :components ((:file "deepseek")
                                  (:file "groq")
-                                 (:file "voyage")))))))
+                                 (:file "voyage")
+                                 (:file "databricks")))))))
