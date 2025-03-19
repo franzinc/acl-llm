@@ -104,22 +104,15 @@ localhost.
   (let* ((options (st-json:jso))
          (request (st-json:jso
                    "model" (llm-ollama-chat-model vendor)
-                   "messages" (list)
+                   "messages" (loop for exchange in (llm-chat-prompt-exchanges prompt)
+                                    for role = (llm-chat-prompt-exchange-role exchange)
+                                    collect (st-json:jso
+                                             "role" (symbol-name role)
+                                             "content" (llm-chat-prompt-exchange-content exchange)))
                    "options" options
                    "stream" (st-json:as-json-bool streaming))))
-    ;; populate messages
-    (dolist (exchange (llm-chat-prompt-exchanges prompt))
-      (push (st-json:jso "role" (symbol-name (llm-chat-prompt-exchange-role exchange))
-                         "content" (llm-chat-prompt-exchange-content exchange))
-            (st-json:getjso "messages" request)))
-    (when (llm-chat-prompt-context prompt)
-      (push (st-json:jso "role" "system"
-                         "content" (llm-vendor-utils-get-system-prompt vendor))
-            (st-json:getjso "messages" request)))
     ;; populate tool calls
     (when (llm-chat-prompt-tools prompt)
-      (when streaming
-        (error "Ollama does not yet support streaming with tool calls"))
       (setf (st-json:getjso "tools" request)
             (loop for tool in (llm-chat-prompt-tools prompt)
                   collect (llm-vendor-utils-openai-tool-spec tool))))
