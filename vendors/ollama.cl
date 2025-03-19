@@ -95,9 +95,13 @@ localhost.
                               "arguments" (llm-vendor-utils-tool-use-args tool-use))))))
 
 (defun llm-ollama-response-format (format)
-  (if* (eq format :json)
-     then "json"
-     else (llm-vendor-utils-convert-plist-to-jso format)))
+  (etypecase format
+    (keyword (if* (eq format :json)
+                then "json"
+                else (error "When response-format is given as a keyword, it must be \":json\" but ~s was given." format)))
+    (cons (llm-vendor-utils-convert-plist-to-jso format))
+    (string (st-json:read-json-from-string format))
+    (st-json:jso format)))
 
 (defmethod llm-vendor-chat-request ((vendor llm-ollama) prompt streaming)
   (llm-vendor-utils-combine-to-system-prompt prompt *llm-ollama-example-prelude*)
@@ -119,8 +123,7 @@ localhost.
     ;; response-format
     (when (llm-chat-prompt-response-format prompt)
       (setf (st-json:getjso "format" request)
-            (llm-ollama-response-format
-             (llm-chat-prompt-response-format prompt))))
+            (llm-ollama-response-format (llm-chat-prompt-response-format prompt))))
     ;; populate options
     (when (llm-chat-prompt-temperature prompt)
       (setf (st-json:getjso "temperature" options) (llm-chat-prompt-temperature vendor)))

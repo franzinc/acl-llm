@@ -121,23 +121,26 @@ necessary to do so."
                  (when properties
                    (st-json:mapjso #'search-and-set-additional-properties
                                    properties))))))
-    (cond ((eq format :json)
-           (st-json:jso "type" "json_object"))
-          (t
-           (st-json:jso
-            "type" "json_schema"
-            "json_schema" (st-json:jso
-                           "name" "response"
-                           "strict" (st-json:as-json-bool t)
-                           "schema" (let ((schema (llm-vendor-utils-convert-plist-to-jso format)))
-                                      ;; check top-level "type"
-                                      ;; for OpenAI, it must be "object"
-                                      (unless (and #1=(st-json:getjso "type" schema)
-                                                   (string-equal "object" #1#))
-                                        (error "OpenAI's json schema must have type \"object\" at the top level but got: ~s"
-                                               #1#))
-                                      (set-additional-properties schema)
-                                      schema)))))))
+    (etypecase format
+      (keyword (if* (eq format :json)
+                  then (st-json:jso "type" "json_object")
+                  else (error "When response-format is given as a keyword, it must be \":json\" but ~s was given." format)))
+      (string (st-json:read-json-from-string format))
+      (st-json:jso format)
+      (cons (st-json:jso
+             "type" "json_schema"
+             "json_schema" (st-json:jso
+                            "name" "response"
+                            "strict" (st-json:as-json-bool t)
+                            "schema" (let ((schema (llm-vendor-utils-convert-plist-to-jso format)))
+                                       ;; check top-level "type"
+                                       ;; for OpenAI, it must be "object"
+                                       (unless (and #1=(st-json:getjso "type" schema)
+                                                    (string-equal "object" #1#))
+                                         (error "OpenAI's json schema must have type \"object\" at the top level but got: ~s"
+                                                #1#))
+                                       (set-additional-properties schema)
+                                       schema)))))))
 
 (defun llm-openai-build-tool-uses (tool-uses)
   (loop for tool-use in tool-uses

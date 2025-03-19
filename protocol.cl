@@ -368,7 +368,9 @@ values in plists and vectors should be strings, not symbols. LLMs will often
 require the top-level schema passed in to be an object: `(:type \"object\"
 :properties (:val <schema> :other-val <other-schema>) :required [\"val\"
 \"other-val\"])'. Often, all properties must be required. Arrays can be
-specified with `(:type \"array\" :items <schema>)'.
+specified with `(:type \"array\" :items <schema>)'. If it's given as a string,
+it must be a valid JSON schema and it will be sent to the the LLM directly.
+Similarly, it can also be given as a `st-json:jso'.
 
 `context', `examples', `functions', `temperature', and `max-tokens' are usually
 turned into part of the exchange, and if so, they will be put in the first
