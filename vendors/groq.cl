@@ -1,6 +1,4 @@
 ;;;; See the file LICENSE for the full license governing this code.
-(in-package #:cl-user)
-
 (defpackage #:acl-llm.protocol
   (:export #:llm-groq
            #:make-llm-groq))
@@ -14,7 +12,7 @@
   (:documentation "See Groq API documentation at:
 https://console.groq.com/docs/api-reference"))
 
-(defun make-llm-groq (&key key chat-model)
+(defun make-llm-groq (&key key chat-model &allow-other-keys)
   (make-instance 'llm-groq
                  :endpoint +llm-groq-endpoint+
                  :key key

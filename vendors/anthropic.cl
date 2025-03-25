@@ -1,6 +1,4 @@
 ;;;; See the file LICENSE for the full license governing this code.
-(in-package #:cl-user)
-
 (defpackage #:acl-llm.protocol
   (:export #:llm-claude
            #:make-llm-claude
@@ -24,7 +22,7 @@
                :accessor llm-claude-chat-model
                :type simple-string)))
 
-(defun make-llm-claude (&key key (chat-model +llm-claude-default-chat-model+))
+(defun make-llm-claude (&key key (chat-model +llm-claude-default-chat-model+) &allow-other-keys)
   (make-instance 'llm-claude :key key
                              :chat-model chat-model))
 

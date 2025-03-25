@@ -1,6 +1,4 @@
 ;;;; See the file LICENSE for the full license governing this code.
-(in-package #:cl-user)
-
 (defpackage #:acl-llm.protocol
   (:export #:*llm-openai-example-prelude*
            #:llm-openai
@@ -36,7 +34,8 @@ reasonable default."))
 
 (defun make-llm-openai (&key key
                           (chat-model +llm-openai-default-chat-model+)
-                          (embedding-model +llm-openai-default-embedding-model+))
+                          (embedding-model +llm-openai-default-embedding-model+)
+                        &allow-other-keys)
   (make-instance 'llm-openai :key key
                              :chat-model chat-model
                              :embedding-model embedding-model))

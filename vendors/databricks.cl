@@ -1,5 +1,4 @@
-(in-package #:cl-user)
-
+;;;; See the file LICENSE for the full license governing this code.
 (defpackage #:acl-llm.protocol
   (:export #:llm-databricks
            #:make-llm-databricks
@@ -11,7 +10,7 @@
   ((endpoint-url :initarg :endpoint-url
                  :accessor llm-databricks-endpoint-url)))
 
-(defun make-llm-databricks (&key key endpoint-url)
+(defun make-llm-databricks (&key key endpoint-url &allow-other-keys)
   (make-instance 'llm-databricks
                  :key key
                  :endpoint-url endpoint-url))

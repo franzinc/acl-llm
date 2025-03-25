@@ -1,6 +1,4 @@
 ;;;; See the file LICENSE for the full license governing this code.
-(in-package #:cl-user)
-
 (defpackage #:acl-llm.protocol
   (:export #:*llm-ollama-example-prelude*
            #:llm-ollama-chat-timeout*
@@ -40,7 +38,7 @@ localhost.
 
 `embedding-model' is the model to use for embeddings.  It is required."))
 
-(defun make-llm-ollama (&key (scheme "http") (host "localhost") (port 11434) chat-model embedding-model)
+(defun make-llm-ollama (&key (scheme "http") (host "localhost") (port 11434) chat-model embedding-model &allow-other-keys)
   (make-instance 'llm-ollama
                  :scheme scheme
                  :host host

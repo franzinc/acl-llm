@@ -1,6 +1,4 @@
 ;;;; See the file LICENSE for the full license governing this code.
-(in-package #:cl-user)
-
 (defpackage #:acl-llm.protocol
   (:export #:llm-voyage
            #:make-llm-voyage))
@@ -14,7 +12,7 @@
   (:documentation "See Voyage API documentation at:
 https://docs.voyageai.com/reference/embeddings-api"))
 
-(defun make-llm-voyage (&key key embedding-model)
+(defun make-llm-voyage (&key key embedding-model &allow-other-keys)
   (make-instance 'llm-voyage
                  :endpoint +llm-voyage-endpoint+
                  :key key

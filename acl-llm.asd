@@ -1,3 +1,4 @@
+;;;; See the file LICENSE for the full license governing this code.
 (defpackage #:acl-llm-system
   (:use #:common-lisp #:asdf #:asdf-extensions))
 

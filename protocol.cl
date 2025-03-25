@@ -1,7 +1,4 @@
-;;;; protocol.cl
 ;;;; See the file LICENSE for the full license governing this code.
-(in-package #:cl-user)
-
 (defpackage #:acl-llm.protocol
   (:use #:cl
         #:excl

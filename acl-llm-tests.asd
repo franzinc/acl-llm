@@ -1,4 +1,4 @@
-;;;; acl-llm-tests.asd
+;;;; See the file LICENSE for the full license governing this code.
 (in-package #:cl-user)
 
 (defpackage #:acl-llm-tests-system

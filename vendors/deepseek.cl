@@ -1,6 +1,4 @@
 ;;;; See the file LICENSE for the full license governing this code.
-(in-package #:cl-user)
-
 (defpackage #:acl-llm.protocol
   (:export #:llm-deepseek
            #:make-llm-deepseek))
@@ -16,7 +14,7 @@
   (:documentation "See DeepSeek API documentation at:
 https://api-docs.deepseek.com/api"))
 
-(defun make-llm-deepseek (&key key (chat-model +llm-deepseek-default-model+))
+(defun make-llm-deepseek (&key key (chat-model +llm-deepseek-default-model+) &allow-other-keys)
   (make-instance 'llm-deepseek
                  :endpoint +llm-deepseek-endpoint+
                  :key key
