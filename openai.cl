@@ -469,17 +469,6 @@ Authorization: API-KEY
 
 
 
-(defun format-ask-my-documents-prompt (query id-content)
-  (let* ((formatted-content (mapcar (lambda (u) (format nil "citation-id:~a content:'~a'" (car u) (cadr u))) id-content))
-         (prompt (format nil "Here is a list of citation IDs and content related to the query '~a':~%
-~{~a~%~}.
-Respond to the query '~a' as though you wrote the content.  Be brief.  You only have 20 seconds to reply.
-Place your response to the query in the 'response' field.
-Insert the list of citations whose content informed the response into the 'citation_ids' array.
-" query formatted-content query)))
-  prompt))
-
-
 
 #+acl-llm-build
 (key-args-fun ask-my-documents
@@ -726,3 +715,34 @@ This function creates a JSON object to tell OpenAI how we want its response stru
                                 response-list
                                 ))))
                    (error (e) (handle-llm-error "ask-for-table" (princ-to-string e) (list (list (princ-to-string e))))))))
+
+
+(defvar *ask-my-documents-prefix*
+  "Here is a list of citation IDs CITATIONS of content related to the query 'QUERY'.
+Respond to the query as though you wrote the content.
+Be brief.  You only have 20 seconds to reply.")
+
+(defvar *ask-my-documents-suffix*
+"Place your response to the query QUERY in the 'response' field.
+Insert the list of citations whose content informed the response into the 'citation_ids' array.
+Each citation-id should be a well-formed URI such as <http://franz.com/vdb/id/1234>")
+
+(defun set-ask-my-documents-prompt (prefix &optional (suffix *ask-my-documents-suffix*))
+     (setf *ask-my-documents-prefix* prefix)
+     (setf *ask-my-documents-suffix* suffix))
+
+(defun format-ask-my-documents-prompt (query id-content)
+  (let (prompt
+        (citations
+          (format nil "~%[~{~a~^,~% ~}]~%"
+                  (mapcar (lambda
+                              (u)
+                            (format nil "{'citation-id' : '~a', 'content : '~a'}" (car u) (cadr u)))
+                          id-content))))
+    (setf prompt (format nil "~a~%~a" *ask-my-documents-prefix* *ask-my-documents-suffix*))
+    (setf prompt (replace-re prompt "CITATIONS" citations))
+    (setf prompt (replace-re prompt "QUERY" (format nil "~S" query)))
+#+ignore(format t "prompt=~a~%" prompt)
+    prompt))
+
+(set-ask-my-documents-prompt *ask-my-documents-prefix* *ask-my-documents-suffix*)
