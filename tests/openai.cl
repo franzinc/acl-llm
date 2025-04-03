@@ -5,10 +5,6 @@
   (openai)
   (:setup (setf openai (make-llm-openai :key (get-dummy-api-key-string)))))
 
-(addtest (llm-openai-tests) test-llm-openai-capabilities
-  (ensure-same (llm-capabilities openai)
-               '(:streaming :embeddings :embeddings-batch :tool-uses)))
-
 (addtest (llm-openai-tests) test-llm-openai-default-chat-model
   (ensure-same (llm-openai-chat-model openai)
                acl-llm.protocol::+llm-openai-default-chat-model+))

@@ -40,13 +40,6 @@ reasonable default."))
                              :chat-model chat-model
                              :embedding-model embedding-model))
 
-(defmethod llm-capabilities ((vendor llm-openai))
-  (list :streaming :embeddings :embeddings-batch :tool-uses))
-
-(defmethod llm-name ((vendor llm-openai))
-  (or (llm-openai-chat-model vendor)
-      (llm-openai-embedding-model vendor)))
-
 (defun llm-openai-api-key (openai)
   (when (not (slot-boundp openai 'key))
     (error "To call OpenAI API, please add an API key to ~a" openai))
@@ -263,7 +256,3 @@ example, if the API for chat is at https://api.example.com/v1/chat, then
 
 (defmethod llm-vendor-embedding-url ((vendor llm-openai-compatible))
   (llm-openai-compatible-url vendor "embeddings"))
-
-(defmethod llm-name :around ((vendor llm-openai-compatible))
-  (or (call-next-method)
-      "OpenAI Compatible"))

@@ -49,8 +49,7 @@
            #:llm-tool-description
            #:llm-tool-args)
   ;; Generic functions
-  (:export #:llm-capabilities
-           #:llm-chat-token-limit
+  (:export #:llm-chat-token-limit
            #:llm-cancel-request
            #:llm-vendor-request-prelude
            #:llm-vendor-headers
@@ -260,26 +259,6 @@ return value will be used."))
                  :async async))
 
 ;;; Generic functions
-(defgeneric llm-capabilities (vendor)
-  (:documentation "Return a list of the capabilities of `vendor'.
-
-This possible values are only those things that are not the bare minimum of
-functionality to be included in this package, which is non-streaming chat:
-
-`:streaming': the LLM can actually stream responses in the streaming call. Calls
-to `llm-chat-streaming' will work regardless even if the LLM doesn't support
-streaming, it just won't have any partial responses, so basically just operates
-like `llm-chat-async'.
-
-`:embeddings': the LLM can return vector embeddings of text.
-
-`:embeddings-batch': the LLM can return many vector embeddings at the same time.
-
-`:tool-uses': the LLM can call functions.")
-  (:method (vendor)
-    (declare (ignore vendor))
-    nil))
-
 (defgeneric llm-chat-token-limit (vendor)
   (:documentation "Return max number of tokens that can be sent to the LLM.
 For many models we know this number, but for some we don't have enough

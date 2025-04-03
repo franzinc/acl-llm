@@ -6,18 +6,6 @@
    (query "Why is sky blue?"))
   (:setup (setf ollama (make-llm-ollama :chat-model nil :embedding-model nil))))
 
-(addtest (llm-ollama-tests) test-llm-ollama-capabilities
-  (ensure-same (llm-capabilities ollama)
-               '(:streaming :embeddings :embeddings-batch :tool-uses)))
-
-(addtest (llm-ollama-tests) test-llm-ollama-name
-  (ensure-null (llm-name ollama))
-  (setf (llm-ollama-chat-model ollama) "llama3.1")
-  (ensure-same (llm-name ollama) "llama3.1" :test 'string=)
-  (setf (llm-ollama-chat-model ollama) nil
-        (llm-ollama-embedding-model ollama) "llama3.2")
-  (ensure-same (llm-name ollama) "llama3.2") :test 'string=)
-
 (addtest (llm-ollama-tests) test-llm-ollama-chat-url
   (ensure-same (llm-vendor-chat-url ollama)
                "http://localhost:11434/api/chat")

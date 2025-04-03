@@ -26,15 +26,8 @@
   (make-instance 'llm-claude :key key
                              :chat-model chat-model))
 
-(defmethod llm-capabilities ((vendor llm-claude))
-  (list :streaming :tool-uses))
-
 (defmethod llm-chat-token-limit ((vendor llm-claude))
   (llm-vendor-utils-model-token-limit (llm-claude-chat-model vendor)))
-
-(defmethod llm-name ((vendor llm-claude))
-  "Return the name of the provider."
-  "Claude")
 
 (defun llm-claude-api-key (claude)
   (when (not (slot-boundp claude 'key))

@@ -46,13 +46,6 @@ localhost.
                  :chat-model chat-model
                  :embedding-model embedding-model))
 
-(defmethod llm-capabilities ((vendor llm-ollama))
-  (list :streaming :embeddings :embeddings-batch :tool-uses))
-
-(defmethod llm-name ((vendor llm-ollama))
-  (or (llm-ollama-chat-model vendor)
-      (llm-ollama-embedding-model vendor)))
-
 (defmethod llm-chat-token-limit ((vendor llm-ollama))
   (llm-vendor-utils-model-token-limit (llm-ollama-chat-model vendor)))
 
