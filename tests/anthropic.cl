@@ -33,6 +33,16 @@
   (ensure-same (llm-vendor-chat-url claude)
                acl-llm.protocol::+llm-claude-chat-url+))
 
+(addtest (llm-claude-tests) test-llm-claude-chat-prompt-temperature
+  (let* ((st-json:*json-read-default-float-format* 'single-float)
+         (temperature (random 1.0))
+         (prompt (make-llm-chat-prompt query :temperature temperature))
+         (request (llm-vendor-chat-request claude prompt nil))
+         (jso (st-json:read-json-from-string request)))
+    (ensure (< (abs (- temperature
+                       (st-json:getjso "temperature" jso)))
+               1e-5))))
+
 (addtest (llm-claude-tests) test-llm-claude-chat
   (let ((answer "The sky is blue because it is the color of the sky."))
     ;; mocking `llm-request-sync'

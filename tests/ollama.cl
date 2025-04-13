@@ -30,6 +30,17 @@
     (ensure-same (llm-vendor-chat-timeout ollama)
                  *llm-ollama-chat-timeout*)))
 
+(addtest (llm-ollama-tests) test-llm-ollama-chat-prompt-temperature
+  (let* ((st-json:*json-read-default-float-format* 'single-float)
+         (temperature (random 1.0))
+         (prompt (make-llm-chat-prompt query :temperature temperature))
+         (request (llm-vendor-chat-request ollama prompt nil))
+         (jso (st-json:read-json-from-string request)))
+    (ensure (< (abs (- temperature
+                       (st-json:getjso "temperature"
+                                       (st-json:getjso "options" jso))))
+               1e-5))))
+
 (addtest (llm-ollama-tests) test-llm-ollama-chat
   (let ((answer "The sky is blue because it is the color of the sky."))
     ;; mocking `llm-request-sync'

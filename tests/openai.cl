@@ -45,6 +45,16 @@
   (ensure-same (llm-vendor-embedding-url openai)
                (string+ acl-llm.protocol::+llm-openai-endpoint-url+ "embeddings")))
 
+(addtest (llm-openai-tests) test-llm-openai-chat-prompt-temperature
+  (let* ((st-json:*json-read-default-float-format* 'single-float)
+         (temperature (random 2.0))
+         (prompt (make-llm-chat-prompt query :temperature temperature))
+         (request (llm-vendor-chat-request openai prompt nil))
+         (jso (st-json:read-json-from-string request)))
+    (ensure (< (abs (- (print temperature)
+                       (print (st-json:getjso "temperature" jso))))
+               1e-5))))
+
 (addtest (llm-openai-tests) test-llm-openai-chat
   (let ((answer "The sky is blue because it is the color of the sky."))
     ;; mocking `llm-request-sync'

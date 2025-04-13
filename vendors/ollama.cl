@@ -117,9 +117,9 @@ localhost.
             (llm-ollama-response-format (llm-chat-prompt-response-format prompt))))
     ;; populate options
     (when (llm-chat-prompt-temperature prompt)
-      (setf (st-json:getjso "temperature" options) (llm-chat-prompt-temperature vendor)))
+      (setf (st-json:getjso "temperature" options) (llm-chat-prompt-temperature prompt)))
     (when (llm-chat-prompt-max-tokens prompt)
-      (setf (st-json:getjso "num_predict" options) (llm-chat-prompt-max-tokens vendor)))
+      (setf (st-json:getjso "num_predict" options) (llm-chat-prompt-max-tokens prompt)))
     ;; non-standard parameters
     (loop for (k . v) in (llm-chat-prompt-non-standard-params prompt)
           do (setf (st-json:getjso k options) v))

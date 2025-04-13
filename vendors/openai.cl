@@ -180,7 +180,7 @@ necessary to do so."
                   "stream" (st-json:as-json-bool streaming))))
     ;; tmeperature
     (when (llm-chat-prompt-temperature prompt)
-      (setf (st-json:getjso "temperature" request) (* (llm-chat-prompt-temperature prompt) 2.0)))
+      (setf (st-json:getjso "temperature" request) (llm-chat-prompt-temperature prompt)))
     ;; max tokens
     (when (llm-chat-prompt-max-tokens prompt)
       (setf (st-json:getjso "max_completion_tokens" request) (llm-chat-prompt-max-tokens prompt)))
