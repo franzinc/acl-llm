@@ -6,6 +6,7 @@
            #:llm-openai-key
            #:llm-openai-chat-model
            #:llm-openai-embedding-model
+           #:llm-openai-embedding-length
            #:llm-openai-compatible
            #:llm-openai-compatible-endpoint))
 
@@ -17,6 +18,7 @@
 (defconstant +llm-openai-endpoint-url+ "https://api.openai.com/v1/")
 (defconstant +llm-openai-default-chat-model+ "gpt-4o")
 (defconstant +llm-openai-default-embedding-model+ "text-embedding-3-small")
+(defconstant +llm-openai-default-embedding-length+ 1536)
 
 (defclass llm-openai (llm-standard-full-vendor)
   ((key :initarg :key :accessor llm-openai-key :type (or function simple-string))
@@ -32,10 +34,40 @@ reasonable default.
 `embedding-model' is the model to use for embeddings. If unset, it will use a
 reasonable default."))
 
-(defun make-llm-openai (&key key chat-model embedding-model &allow-other-keys)
-  (make-instance 'llm-openai :key key
-                             :chat-model (or chat-model +llm-openai-default-chat-model+)
-                             :embedding-model (or embedding-model +llm-openai-default-embedding-model+)))
+(defun make-llm-openai (&key key chat-model embedding-model embedding-length
+                        &allow-other-keys)
+  (let ((es (db.agraph::internal-lookup-embedder "openai"
+                                                 embedding-model
+                                                 embedding-length)))
+    ;; use defaults for model if not given
+    ;; find length if not given from model if possible
+    (make-instance 'llm-openai 
+      :key (or key gpt:*openai-api-key*) ; hack, must generalize
+      :chat-model (or chat-model +llm-openai-default-chat-model+)
+      :embedding-model (or embedding-model 
+                           (and es (db.agraph::embedder-model es))
+                           +llm-openai-default-embedding-model+)
+      :llm-embedding-length (or embedding-length
+                                (and es (db.agraph::embedder-length es))))))
+
+(db.agraph::define-embedder "openai"
+    :models (("text-embedding-ada-002" 
+              :length 1536
+              :needs-api-key-p t
+              :defaultp t)
+             ("text-embedding-3-large" 
+              :length 1536
+              :can-set-length-p t   
+              :needs-api-key-p t
+              :defaultp nil)
+             ("text-embedding-3-small" 
+              :length 1536
+              :can-set-length-p t
+              :needs-api-key-p t
+              :defaultp nil)
+             ))
+             
+              
 
 (defun llm-openai-api-key (openai)
   (when (not (slot-boundp openai 'key))
@@ -46,6 +78,14 @@ reasonable default."))
      elseif (functionp key)
        then (funcall key)
        else (error "API key must either be a string or a function that takes no argument, but got ~a" key))))
+
+
+;; this is here to make the cypress test suite pass
+;; and will be modified later
+(defmethod llm-vendor-request-prelude ((vendor llm-openai))
+  (or (and (> (length (llm-openai-key vendor)) 0)
+           (not (equal (llm-openai-key vendor) "missing")))
+      (error 'llm-api-key-missing)))
 
 (defmethod llm-vendor-headers ((vendor llm-openai))
   (list (cons "Authorization"

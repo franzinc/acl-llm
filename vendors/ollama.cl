@@ -46,6 +46,9 @@ localhost.
                  :chat-model chat-model
                  :embedding-model embedding-model))
 
+
+(db.agraph::define-embedder "ollama" :models (("find model name")))
+
 (defmethod llm-chat-token-limit ((vendor llm-ollama))
   (llm-vendor-utils-model-token-limit (llm-ollama-chat-model vendor)))
 

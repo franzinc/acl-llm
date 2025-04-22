@@ -15,6 +15,8 @@
            #:llm-standard-chat-vendor-default-chat-max-tokens
            #:llm-standard-chat-vendor-default-chat-non-standard-params
            #:llm-standard-full-vendor
+           ;; llm-standard-embedding-vendor
+           #:llm-embedding-length
            ;; llm-chat-prompt
            #:llm-chat-prompt
            #:make-llm-chat-prompt
@@ -47,7 +49,10 @@
            #:llm-tool-function
            #:llm-tool-name
            #:llm-tool-description
-           #:llm-tool-args)
+           #:llm-tool-args
+           ;;
+           #:llm-api-key-missing
+           )
   ;; Generic functions
   (:export #:llm-chat-token-limit
            #:llm-cancel-request
@@ -107,6 +112,7 @@
 (defvar *debug-llm* nil
   "true to print out the http traffic to/from the LLM")
 
+(define-condition llm-api-key-missing (error) ())
 
 ;;; LLM request
 (defvar *llm-request-timeout* nil
@@ -184,7 +190,12 @@ These values will be set as parameters on the prompt, so changing values after
 the initial call in the chat will not have an effect. New values will have an
 effect, however."))
 
-(defclass llm-standard-full-vendor (llm-standard-chat-vendor)
+(defclass llm-standard-embedding-vendor (llm-standard-vendor)
+  ((embedding-length :initform 1
+                     :initarg :llm-embedding-length :accessor llm-embedding-length))
+  (:documentation "A class for LLM vendors that support embeddings."))
+
+(defclass llm-standard-full-vendor (llm-standard-chat-vendor llm-standard-embedding-vendor)
   ()
   (:documentation "A class for LLM vendors that implements both chat and embeddings."))
 
@@ -967,3 +978,7 @@ returned results."
               then (apply (llm-tool-function tool)
                           (append (list end-func) call-args))
               else (funcall end-func (apply (llm-tool-function tool) call-args)))))
+
+
+
+  
