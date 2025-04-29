@@ -15,7 +15,7 @@
   "The prelude to use for examples in OpenAI chat prompts.")
 
 (defconstant +llm-openai-endpoint-url+ "https://api.openai.com/v1/")
-(defconstant +llm-openai-default-chat-model+ "gpt-4o-mini")
+(defconstant +llm-openai-default-chat-model+ "gpt-4o")
 (defconstant +llm-openai-default-embedding-model+ "text-embedding-3-small")
 
 (defclass llm-openai (llm-standard-full-vendor)
@@ -32,13 +32,10 @@ reasonable default.
 `embedding-model' is the model to use for embeddings. If unset, it will use a
 reasonable default."))
 
-(defun make-llm-openai (&key key
-                          (chat-model +llm-openai-default-chat-model+)
-                          (embedding-model +llm-openai-default-embedding-model+)
-                        &allow-other-keys)
+(defun make-llm-openai (&key key chat-model embedding-model &allow-other-keys)
   (make-instance 'llm-openai :key key
-                             :chat-model chat-model
-                             :embedding-model embedding-model))
+                             :chat-model (or chat-model +llm-openai-default-chat-model+)
+                             :embedding-model (or embedding-model +llm-openai-default-embedding-model+)))
 
 (defun llm-openai-api-key (openai)
   (when (not (slot-boundp openai 'key))
@@ -192,7 +189,8 @@ necessary to do so."
     (when (llm-chat-prompt-tools prompt)
       (setf (st-json:getjso "tools" request)
             (loop for tool in (llm-chat-prompt-tools prompt)
-                  collect (llm-vendor-utils-openai-tool-spec tool))))
+                  collect (llm-vendor-utils-openai-tool-spec tool)))
+      (setf (st-json:getjso "tool_choice" request) "required"))
     ;; messages
     (setf (st-json:getjso "messages" request)
           (llm-openai-build-messages prompt))
