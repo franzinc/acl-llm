@@ -29,7 +29,8 @@
                    (:module "openai-compatible"
                     :pathname ""
                     :depends-on ("openai")
-                    :components ((:file "deepseek")
+                    :components ((:file "azure")
+                                 (:file "deepseek")
                                  (:file "groq")
                                  (:file "voyage")
                                  (:file "databricks")))))))

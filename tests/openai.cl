@@ -231,7 +231,7 @@
       }
     }
   },
-  \"model\": \"gpt-4o-mini\",
+  \"model\": \"gpt-4o\",
   \"stream\": false
 }")))
         (ensure-same-jso actual-payload expected-payload))
